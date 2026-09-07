@@ -12,6 +12,21 @@ export function exportBlockedMessage(check: ExportCheck): string {
 }
 
 /**
+ * Toast copy after 「确认所有已有资料」.
+ * `batchConfirmed` is the number of items just confirmed (required + optional).
+ * Header progress always comes from ExportCheck (required only) after refresh.
+ */
+export function formatConfirmReadyToast(batchConfirmed: number, check: ExportCheck): string {
+  if (batchConfirmed === 0) {
+    return '没有可确认的资料（请先上传或生成文件）'
+  }
+  if (!check.ok) {
+    return `本批已确认 ${batchConfirmed} 条资料。必填进度 ${check.confirmed}/${check.required}，尚不能出包`
+  }
+  return `本批已确认 ${batchConfirmed} 条资料。必填已齐，可以出包`
+}
+
+/**
  * Gate export behind completeness: `pickSavePath` (the save dialog) is not
  * called unless the package is allowed to export.
  */

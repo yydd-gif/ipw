@@ -1,4 +1,8 @@
-import { canOpenExportSaveDialog, exportBlockedMessage } from '@shared/completeness'
+import {
+  canOpenExportSaveDialog,
+  exportBlockedMessage,
+  formatConfirmReadyToast
+} from '@shared/completeness'
 import type { CatalogVolumeState, ExportCheck, Project } from '@shared/types'
 import { StatusBadge } from '../components/StatusBadge'
 
@@ -45,7 +49,8 @@ export default function ExportView(props: {
             onClick={async () => {
               const n = await window.studio.confirmReady(props.project.id)
               await props.onRefresh()
-              props.notify(`已确认 ${n} 条已有资料的条目`)
+              const latest = await window.studio.checkExport(props.project.id)
+              props.notify(formatConfirmReadyToast(n, latest))
             }}
           >
             确认所有已有资料

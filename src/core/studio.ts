@@ -466,16 +466,17 @@ export class Studio {
 
   confirmItemsWithArtifacts(projectId: string): number {
     const state = this.getCatalogState(projectId)
+    let n = 0
     for (const vol of state) {
       for (const item of vol.items) {
         const hasFile = Boolean(item.instance.generated_path) || item.uploads.length > 0
         if (hasFile && item.instance.status !== 'confirmed' && item.instance.status !== 'waived') {
           this.setItemStatus(projectId, item.item.code, 'confirmed')
+          n += 1
         }
       }
     }
-    // Same source of truth as the 出包 page “已确认” count (required + confirmed).
-    return this.checkExport(projectId).confirmed
+    return n
   }
 
   checkExport(projectId: string): ExportCheck {

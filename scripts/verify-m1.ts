@@ -9,7 +9,11 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import PizZip from 'pizzip'
 import { itemsForProjectType } from '../src/shared/catalog'
-import { canOpenExportSaveDialog, withExportSavePath } from '../src/shared/completeness'
+import {
+  canOpenExportSaveDialog,
+  formatConfirmReadyToast,
+  withExportSavePath
+} from '../src/shared/completeness'
 import { Studio } from '../src/core/studio'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -77,11 +81,48 @@ async function main(): Promise<void> {
   }
   assert(studio.listLogs(project.id).length >= 3, 'need ≥3 daily logs')
 
+  assert(
+    formatConfirmReadyToast(0, {
+      ok: false,
+      blockers: [],
+      confirmed: 0,
+      required: 23,
+      waived: 0
+    }) === '没有可确认的资料（请先上传或生成文件）',
+    'n=0 toast copy'
+  )
+  assert(
+    formatConfirmReadyToast(3, {
+      ok: false,
+      blockers: [{ code: '1.2', title: '合同', reason: '尚未提供资料' }],
+      confirmed: 1,
+      required: 23,
+      waived: 0
+    }) === '本批已确认 3 条资料。必填进度 1/23，尚不能出包',
+    'n>0 incomplete toast copy uses 本批已确认 and ExportCheck progress'
+  )
+  assert(
+    formatConfirmReadyToast(5, {
+      ok: true,
+      blockers: [],
+      confirmed: 23,
+      required: 23,
+      waived: 0
+    }) === '本批已确认 5 条资料。必填已齐，可以出包',
+    'n>0 complete toast copy'
+  )
+
   const earlyCheck = studio.checkExport(project.id)
   assert(!earlyCheck.ok, 'export check fails while required items are incomplete')
   assert(
     !canOpenExportSaveDialog(earlyCheck),
     'save dialog must stay closed while required items are incomplete'
+  )
+  const none = studio.confirmItemsWithArtifacts(project.id)
+  assert(none === 0, 'batch confirm is 0 before any artifacts')
+  assert(
+    formatConfirmReadyToast(none, earlyCheck) === '没有可确认的资料（请先上传或生成文件）',
+    'empty batch uses n=0 copy, not header confirmed count'
   )
 
   let saveDialogOpened = false
@@ -123,6 +164,20 @@ async function main(): Promise<void> {
   const logDoc = studio.generateDocument(project.id, '2.10')
   assert(fs.existsSync(logDoc.path), '2.10 docx exists')
 
+  const optionalBatch = studio.confirmItemsWithArtifacts(project.id)
+  const afterOptional = studio.checkExport(project.id)
+  assert(optionalBatch > 0, 'optional weekly/log artifacts are in the batch count')
+  assert(!afterOptional.ok, 'optional confirms do not make export ready')
+  assert(
+    afterOptional.confirmed === 0,
+    'header ExportCheck.confirmed stays required-only after optional batch'
+  )
+  assert(
+    formatConfirmReadyToast(optionalBatch, afterOptional) ===
+      `本批已确认 ${optionalBatch} 条资料。必填进度 ${afterOptional.confirmed}/${afterOptional.required}，尚不能出包`,
+    'incomplete toast reports batch n and required progress separately'
+  )
+
   for (const item of itemsForProjectType('hybrid')) {
     if (item.produceType === 'template' || item.produceType === 'derived') {
       if (item.code === '2.10' || item.code === '2.12') continue
@@ -138,21 +193,20 @@ async function main(): Promise<void> {
   const confirmed = studio.confirmItemsWithArtifacts(project.id)
   assert(confirmed > 0, 'confirmed some items')
   const check = studio.checkExport(project.id)
-  assert(confirmed === check.confirmed, 'toast/confirm count must match on-page required confirmed count')
   assert(check.ok, `export should be allowed, blockers=${JSON.stringify(check.blockers)}`)
   assert(canOpenExportSaveDialog(check), 'save dialog may open only after completeness passes')
-
-  const confirmedIncludingOptional = studio
-    .getCatalogState(project.id)
-    .flatMap((v) => v.items)
-    .filter((entry) => entry.instance.status === 'confirmed').length
   assert(
-    confirmedIncludingOptional >= check.confirmed,
-    'optional confirmed items must not inflate the displayed required count'
+    confirmed !== check.confirmed,
+    'batch n includes optional artifacts; header ExportCheck.confirmed is required-only'
   )
   assert(
-    confirmed !== confirmedIncludingOptional,
-    'optional artifacts (e.g. 2.10/2.11/2.12) must not be mixed into the toast/page confirmed count'
+    formatConfirmReadyToast(confirmed, check) ===
+      `本批已确认 ${confirmed} 条资料。必填已齐，可以出包`,
+    'ready toast reports batch n and does not reuse header confirmed count'
+  )
+  assert(
+    !formatConfirmReadyToast(confirmed, check).includes(`已确认 ${check.confirmed} 条已有资料`),
+    'must not pretend batch n is the header confirmed count'
   )
 
   const catalogState = studio.getCatalogState(project.id)
