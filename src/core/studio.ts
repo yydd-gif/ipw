@@ -408,11 +408,36 @@ export class Studio {
         }
       }
       const filtered = filterLogsByPeriod(logs, weekly?.period_start, weekly?.period_end)
+      const fillOpts = { code: item.code, templatesDir: this.dirs.templatesDir }
+      if (itemCode === '2.10') {
+        const prefix = sanitizeFilePart(`${item.code}_${item.title}`)
+        clearGeneratedPrefix(outDir, prefix)
+        const targets = filtered.length > 0 ? filtered : [null]
+        const paths: string[] = []
+        for (const log of targets) {
+          const data = buildTemplateData(item, project, instance.payload, {
+            logs: log ? [log] : [],
+            weekly
+          })
+          const suffix = log ? `_${sanitizeFilePart(log.date)}` : ''
+          const outFile = uniquePath(path.join(outDir, `${prefix}${suffix}.docx`))
+          writeFilledDocx(templatePath, outFile, data, fillOpts)
+          paths.push(outFile)
+        }
+        const primary = paths[paths.length - 1]!
+        this.store.exec(
+          `UPDATE catalog_instances SET generated_path=?, status=CASE WHEN status='confirmed' THEN 'confirmed' ELSE 'draft' END,
+           payload=?, updated_at=? WHERE project_id=? AND item_code=?`,
+          [primary, JSON.stringify({ ...instance.payload, generated_paths: paths }), nowISO(), projectId, itemCode]
+        )
+        this.touchProject(projectId)
+        return { path: primary, itemCode, paths }
+      }
       const data = buildTemplateData(item, project, instance.payload, {
         logs: filtered,
         weekly
       })
-      writeFilledDocx(templatePath, outPath, data)
+      writeFilledDocx(templatePath, outPath, data, fillOpts)
     }
 
     this.store.exec(
@@ -543,6 +568,15 @@ function uniquePath(filePath: string): string {
   let i = 1
   while (fs.existsSync(`${base}_${i}${ext}`)) i += 1
   return `${base}_${i}${ext}`
+}
+
+function clearGeneratedPrefix(dir: string, prefix: string): void {
+  if (!fs.existsSync(dir)) return
+  for (const name of fs.readdirSync(dir)) {
+    if (name.startsWith(prefix) && name.endsWith('.docx')) {
+      fs.unlinkSync(path.join(dir, name))
+    }
+  }
 }
 
 function addDays(isoDate: string, days: number): string {

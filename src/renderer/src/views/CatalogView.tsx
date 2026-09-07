@@ -109,29 +109,48 @@ function PayloadForm(props: {
     )
   }
 
-  const hardware = (Array.isArray(payload.hardware) ? payload.hardware : [{ name: '', spec: '', qty: '1', unit: '台', remark: '' }]) as Record<string, string>[]
-  const software = (Array.isArray(payload.software) ? payload.software : [{ name: '', version: '', license: '', qty: '1', remark: '' }]) as Record<string, string>[]
+  const hardware = (Array.isArray(payload.hardware)
+    ? payload.hardware
+    : [{ name: '', spec: '', brand: '', deploy: '', unit_price: '', qty: '1', total: '', note: '' }]) as Record<
+    string,
+    string
+  >[]
+  const software = (Array.isArray(payload.software)
+    ? payload.software
+    : [{ name: '', vendor: '', func: '', deploy: '', unit_price: '', qty: '1', total: '', note: '' }]) as Record<
+    string,
+    string
+  >[]
   return (
     <div>
       <h4>硬件</h4>
       {hardware.map((row, i) => (
         <div className="grid-3" key={`h${i}`}>
           <input placeholder="名称" value={row.name || ''} onChange={(e) => { const n = hardware.slice(); n[i] = { ...row, name: e.target.value }; set('hardware', n) }} />
-          <input placeholder="规格" value={row.spec || ''} onChange={(e) => { const n = hardware.slice(); n[i] = { ...row, spec: e.target.value }; set('hardware', n) }} />
+          <input placeholder="规格型号" value={row.spec || ''} onChange={(e) => { const n = hardware.slice(); n[i] = { ...row, spec: e.target.value }; set('hardware', n) }} />
+          <input placeholder="品牌" value={row.brand || ''} onChange={(e) => { const n = hardware.slice(); n[i] = { ...row, brand: e.target.value }; set('hardware', n) }} />
+          <input placeholder="部署位置" value={row.deploy || ''} onChange={(e) => { const n = hardware.slice(); n[i] = { ...row, deploy: e.target.value }; set('hardware', n) }} />
+          <input placeholder="单价" value={row.unit_price || ''} onChange={(e) => { const n = hardware.slice(); n[i] = { ...row, unit_price: e.target.value }; set('hardware', n) }} />
           <input placeholder="数量" value={row.qty || ''} onChange={(e) => { const n = hardware.slice(); n[i] = { ...row, qty: e.target.value }; set('hardware', n) }} />
+          <input placeholder="合计" value={row.total || ''} onChange={(e) => { const n = hardware.slice(); n[i] = { ...row, total: e.target.value }; set('hardware', n) }} />
+          <input placeholder="备注" value={row.note || row.remark || ''} onChange={(e) => { const n = hardware.slice(); n[i] = { ...row, note: e.target.value }; set('hardware', n) }} />
         </div>
       ))}
-      <button className="btn" onClick={() => set('hardware', [...hardware, { name: '', spec: '', qty: '1', unit: '台', remark: '' }])}>增加硬件</button>
+      <button className="btn" onClick={() => set('hardware', [...hardware, { name: '', spec: '', brand: '', deploy: '', unit_price: '', qty: '1', total: '', note: '' }])}>增加硬件</button>
       <h4>软件</h4>
       {software.map((row, i) => (
         <div className="grid-3" key={`s${i}`}>
           <input placeholder="名称" value={row.name || ''} onChange={(e) => { const n = software.slice(); n[i] = { ...row, name: e.target.value }; set('software', n) }} />
-          <input placeholder="版本" value={row.version || ''} onChange={(e) => { const n = software.slice(); n[i] = { ...row, version: e.target.value }; set('software', n) }} />
-          <input placeholder="授权" value={row.license || ''} onChange={(e) => { const n = software.slice(); n[i] = { ...row, license: e.target.value }; set('software', n) }} />
+          <input placeholder="厂商" value={row.vendor || row.version || ''} onChange={(e) => { const n = software.slice(); n[i] = { ...row, vendor: e.target.value }; set('software', n) }} />
+          <input placeholder="功能" value={row.func || row.license || ''} onChange={(e) => { const n = software.slice(); n[i] = { ...row, func: e.target.value }; set('software', n) }} />
+          <input placeholder="部署位置" value={row.deploy || ''} onChange={(e) => { const n = software.slice(); n[i] = { ...row, deploy: e.target.value }; set('software', n) }} />
+          <input placeholder="单价" value={row.unit_price || ''} onChange={(e) => { const n = software.slice(); n[i] = { ...row, unit_price: e.target.value }; set('software', n) }} />
+          <input placeholder="数量" value={row.qty || ''} onChange={(e) => { const n = software.slice(); n[i] = { ...row, qty: e.target.value }; set('software', n) }} />
+          <input placeholder="备注" value={row.note || row.remark || ''} onChange={(e) => { const n = software.slice(); n[i] = { ...row, note: e.target.value }; set('software', n) }} />
         </div>
       ))}
       <div className="actions">
-        <button className="btn" onClick={() => set('software', [...software, { name: '', version: '', license: '', qty: '1', remark: '' }])}>增加软件</button>
+        <button className="btn" onClick={() => set('software', [...software, { name: '', vendor: '', func: '', deploy: '', unit_price: '', qty: '1', total: '', note: '' }])}>增加软件</button>
         <button className="btn primary" onClick={() => props.onSave({ hardware, software })}>保存清单</button>
       </div>
     </div>

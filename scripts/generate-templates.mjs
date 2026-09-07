@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
- * Generate placeholder .docx templates with docxtemplater tags kept in a
- * single <w:t> run so Chinese Word tables fill reliably.
+ * Generate .docx templates used by CellPatch (no docxtemplater tags).
+ *
+ * Never overwrites an existing file — real user templates and a dropped
+ * core-templates.zip must not be clobbered by postinstall.
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -39,9 +41,10 @@ function heading(text) {
   return `<w:p><w:pPr><w:spacing w:before="200" w:after="120"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="28"/><w:rFonts w:eastAsia="黑体"/></w:rPr><w:t>${escapeXml(text)}</w:t></w:r></w:p>`
 }
 
-function tc(inner, width = 2400) {
+function tc(inner, width = 2400, span) {
+  const spanXml = span && span > 1 ? `<w:gridSpan w:val="${span}"/>` : ''
   return `<w:tc>
-    <w:tcPr><w:tcW w:w="${width}" w:type="dxa"/><w:tcBorders>
+    <w:tcPr><w:tcW w:w="${width}" w:type="dxa"/>${spanXml}<w:tcBorders>
       <w:top w:val="single" w:sz="4" w:color="8A6A3A"/>
       <w:left w:val="single" w:sz="4" w:color="8A6A3A"/>
       <w:bottom w:val="single" w:sz="4" w:color="8A6A3A"/>
@@ -52,9 +55,10 @@ function tc(inner, width = 2400) {
   </w:tc>`
 }
 
-function headerTc(text, width = 2400) {
+function headerTc(text, width = 2400, span) {
+  const spanXml = span && span > 1 ? `<w:gridSpan w:val="${span}"/>` : ''
   return `<w:tc>
-    <w:tcPr><w:tcW w:w="${width}" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="6B3A2A"/>
+    <w:tcPr><w:tcW w:w="${width}" w:type="dxa"/>${spanXml}<w:shd w:val="clear" w:color="auto" w:fill="6B3A2A"/>
       <w:tcBorders>
         <w:top w:val="single" w:sz="4" w:color="6B3A2A"/>
         <w:left w:val="single" w:sz="4" w:color="6B3A2A"/>
@@ -152,6 +156,12 @@ const APP = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 </Properties>`
 
 function saveDocx(filename, titleText, bodyInner) {
+  fs.mkdirSync(OUT, { recursive: true })
+  const dest = path.join(OUT, filename)
+  if (fs.existsSync(dest)) {
+    console.log('skip existing', filename)
+    return false
+  }
   const zip = new PizZip()
   zip.file('[Content_Types].xml', CONTENT_TYPES)
   zip.file('_rels/.rels', RELS)
@@ -160,194 +170,216 @@ function saveDocx(filename, titleText, bodyInner) {
   zip.file('word/styles.xml', STYLES)
   zip.file('docProps/core.xml', core(titleText))
   zip.file('docProps/app.xml', APP)
-  fs.mkdirSync(OUT, { recursive: true })
   const buf = zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' })
-  fs.writeFileSync(path.join(OUT, filename), buf)
+  fs.writeFileSync(dest, buf)
   console.log('wrote', filename)
+  return true
 }
 
-const headerBlock = [
-  kvTable([
-    ['项目名称', '{project_name}'],
-    ['建设单位', '{owner}'],
-    ['监理单位', '{supervisor}'],
-    ['施工单位', '{contractor}'],
-    ['合同号', '{contract_no}'],
-    ['阶段', '{phase}'],
-    ['文号', '{doc_no}']
-  ])
-].join('')
+function para(text, opts = {}) {
+  const extraRPr = opts.bold ? '<w:b/>' : ''
+  const sz = opts.sz ? `<w:sz w:val="${opts.sz}"/>` : '<w:sz w:val="21"/>'
+  const jc = opts.jc ? `<w:jc w:val="${opts.jc}"/>` : ''
+  return `<w:p><w:pPr>${jc}<w:spacing w:after="120"/></w:pPr>${t(text, extraRPr + sz)}</w:p>`
+}
+
+function emptyTc(width = 2400, span) {
+  return tc(t(''), width, span)
+}
+
+function tr(cells) {
+  return `<w:tr>${cells.join('')}</w:tr>`
+}
+
+function ellipsisRow(widths) {
+  return tr(widths.map((w) => tc(t('……'), w)))
+}
+
+function emptyRow(widths) {
+  return tr(widths.map((w) => emptyTc(w)))
+}
 
 function save210() {
-  const logRow = `<w:tr>
-    ${tc(t('{#logs}{date}'), 1400)}
-    ${tc(t('{weather}'), 1200)}
-    ${tc(t('{location}'), 1600)}
-    ${tc(t('{work_done}'), 2400)}
-    ${tc(t('{qs_check}'), 1600)}
-    ${tc(t('{crew_count}'), 800)}
-    ${tc(t('{issues}{/logs}'), 1600)}
-  </w:tr>`
+  const w = [2200, 2500, 1800, 2800]
   const body = [
-    title('2.10 施工日志'),
-    headerBlock,
-    heading('日志明细'),
-    p(t('共 {log_count} 条。'), null),
+    title('施工日志'),
+    para('工程名称：×××'),
+    para('编号：YS-XXXXXX'),
     table(
       [
-        `<w:tr>${['日期', '天气', '地点', '完成工作', '质检情况', '人数', '问题'].map((h, i) => headerTc(h, [1400, 1200, 1600, 2400, 1600, 800, 1600][i])).join('')}</w:tr>`,
-        logRow
+        tr([tc(t('施工单位'), w[0]), emptyTc(w[1]), tc(t('日期'), w[2]), emptyTc(w[3])]),
+        tr([tc(t('天气'), w[0]), emptyTc(w[1] + w[2] + w[3], 3)]),
+        tr([tc(t('施工地点'), w[0]), emptyTc(w[1] + w[2] + w[3], 3)]),
+        tr([headerTc('当日完成工作内容', w[0] + w[1] + w[2] + w[3], 4)]),
+        tr([emptyTc(w[0] + w[1] + w[2] + w[3], 4)]),
+        tr([tc(t('质量安全检查：                    施工人数：'), w[0] + w[1] + w[2] + w[3], 4)]),
+        tr([tc(t('存在问题：'), w[0] + w[1] + w[2] + w[3], 4)]),
+        tr([tc(t('协调事项：'), w[0] + w[1] + w[2] + w[3], 4)])
       ],
-      [1400, 1200, 1600, 2400, 1600, 800, 1600]
-    ),
-    heading('协调事项（末条展开）'),
-    p(t('{#logs}{date}：{coordination}{/logs}'), null)
+      w
+    )
   ].join('')
-  saveDocx('2.10_施工日志.docx', '2.10 施工日志', body)
+  saveDocx('2.10_施工日志.docx', '施工日志', body)
 }
 
 function savePeriod(code, name, file) {
+  const w = [2200, 2500, 1800, 2800]
+  const span = w[0] + w[1] + w[2] + w[3]
   const body = [
-    title(`${code} ${name}`),
-    headerBlock,
-    heading('报告周期'),
-    kvTable([
-      ['起始日期', '{period_start}'],
-      ['截止日期', '{period_end}'],
-      ['当前阶段', '{phase}']
-    ]),
-    heading('本期完成工作（由施工日志汇总）'),
-    p(t('{done}'), null),
-    heading('未完事项'),
-    p(t('{undone}'), null),
-    heading('存在问题'),
-    p(t('{issues}'), null),
-    heading('下期计划'),
-    p(t('{plan}'), null)
+    title(name),
+    para('工程名称：×××'),
+    para('编号：YS-XXXXXX'),
+    table(
+      [
+        tr([tc(t('施工单位'), w[0]), emptyTc(w[1]), tc(t('截止日期'), w[2]), emptyTc(w[3])]),
+        tr([tc(t('当前阶段'), w[0]), emptyTc(w[1] + w[2] + w[3], 3)]),
+        tr([headerTc('本期完成工作', span, 4)]),
+        tr([emptyTc(span, 4)]),
+        tr([headerTc('未完事项', span, 4)]),
+        tr([emptyTc(span, 4)]),
+        tr([headerTc('存在问题', span, 4)]),
+        tr([emptyTc(span, 4)]),
+        tr([headerTc('下期计划', span, 4)]),
+        tr([emptyTc(span, 4)])
+      ],
+      w
+    )
   ].join('')
   saveDocx(file, `${code} ${name}`, body)
 }
 
 function save27() {
+  const w = [2800, 2200, 2200, 2100]
   const body = [
-    title('2.7 设备开箱检验记录'),
-    headerBlock,
-    heading('设备信息'),
-    kvTable([
-      ['安装地点', '{location}'],
-      ['出厂编号 / 序列号', '{serial}'],
-      ['设备名称', '{device_name}']
-    ]),
-    heading('检验项目'),
+    title('设备开箱检验记录'),
+    para('工程名称：×××'),
+    para('编号：YS-XXXXXX'),
     table(
       [
-        `<w:tr>${headerTc('检验项', 4000)}${headerTc('结果', 2000)}${headerTc('勾选', 2500)}</w:tr>`,
-        `<w:tr>${tc(t('包装完好'), 4000)}${tc(t('包装完好'), 2000)}${tc(t('{packaging_ok}'), 2500)}</w:tr>`,
-        `<w:tr>${tc(t('外观无损'), 4000)}${tc(t('外观无损'), 2000)}${tc(t('{appearance_ok}'), 2500)}</w:tr>`,
-        `<w:tr>${tc(t('配件齐全'), 4000)}${tc(t('配件齐全'), 2000)}${tc(t('{accessories_ok}'), 2500)}</w:tr>`,
-        `<w:tr>${tc(t('随机资料齐全'), 4000)}${tc(t('资料齐全'), 2000)}${tc(t('{docs_ok}'), 2500)}</w:tr>`,
-        `<w:tr>${tc(t('型号规格与合同相符'), 4000)}${tc(t('型号相符'), 2000)}${tc(t('{model_ok}'), 2500)}</w:tr>`
+        tr([tc(t('施工单位'), w[0]), emptyTc(w[1]), tc(t('日期'), w[2]), emptyTc(w[3])]),
+        tr([tc(t('安装地点'), w[0]), emptyTc(w[1]), tc(t('设备名称'), w[2]), emptyTc(w[3])]),
+        tr([tc(t('出厂编号'), w[0]), emptyTc(w[1] + w[2] + w[3], 3)]),
+        tr([tc(t('包装完好'), w[0]), tc(t('☐'), w[1] + w[2] + w[3], 3)]),
+        tr([tc(t('外观无损'), w[0]), tc(t('☐'), w[1] + w[2] + w[3], 3)]),
+        tr([tc(t('配件齐全'), w[0]), tc(t('☐'), w[1] + w[2] + w[3], 3)]),
+        tr([tc(t('随机资料齐全'), w[0]), tc(t('☐'), w[1] + w[2] + w[3], 3)]),
+        tr([tc(t('型号规格与合同相符'), w[0]), tc(t('☐'), w[1] + w[2] + w[3], 3)]),
+        tr([tc(t('备注'), w[0]), emptyTc(w[1] + w[2] + w[3], 3)])
       ],
-      [4000, 2000, 2500]
-    ),
-    heading('备注'),
-    p(t('{remark}'), null)
+      w
+    )
   ].join('')
-  saveDocx('2.7_设备开箱检验记录.docx', '2.7 设备开箱检验记录', body)
+  saveDocx('2.7_设备开箱检验记录.docx', '设备开箱检验记录', body)
 }
 
 function save28() {
-  const dataRow = `<w:tr>
-    ${tc(t('{#rows}{device_name}'), 2200)}
-    ${tc(t('{location}'), 2000)}
-    ${tc(t('{installer}'), 1800)}
-    ${tc(t('{date}'), 1600)}
-    ${tc(t('{result}{/rows}'), 1600)}
-  </w:tr>`
+  const w = [2200, 2000, 1800, 1600, 1600]
   const body = [
-    title('2.8 设备安装记录'),
-    headerBlock,
-    heading('安装明细'),
+    title('设备安装记录'),
+    para('工程名称：×××'),
+    para('编号：YS-XXXXXX'),
     table(
       [
-        `<w:tr>${['设备名称', '安装地点', '安装人', '日期', '结果'].map((h, i) => headerTc(h, [2200, 2000, 1800, 1600, 1600][i])).join('')}</w:tr>`,
-        dataRow
+        tr(['设备名称', '安装地点', '安装人', '日期', '结果'].map((h, i) => headerTc(h, w[i]))),
+        ellipsisRow(w)
       ],
-      [2200, 2000, 1800, 1600, 1600]
-    ),
-    p(t('TODO：可在资料目录中补充安装照片等附件。'), null)
+      w
+    )
   ].join('')
-  saveDocx('2.8_设备安装记录.docx', '2.8 设备安装记录', body)
+  saveDocx('2.8_设备安装记录.docx', '设备安装记录', body)
 }
 
 function save62() {
+  const coverW = [2800, 6500]
+  const checkW = [4000, 2000]
+  const infoW = [2800, 6500]
   const body = [
-    title('6.2 竣工验收报告'),
-    heading('一、基本信息'),
-    p(t('{basic_info}'), null),
-    heading('二、验收结论'),
-    p(t('{conclusion}'), null),
-    heading('三、质保条款'),
-    p(t('{warranty}'), null),
-    p(t('建设单位：{owner}    施工单位：{contractor}    监理单位：{supervisor}'), null)
+    title('竣工验收报告'),
+    heading('封面信息'),
+    table(
+      [
+        tr([tc(t('项目名称'), coverW[0]), emptyTc(coverW[1])]),
+        tr([tc(t('建设单位'), coverW[0]), emptyTc(coverW[1])]),
+        tr([tc(t('监理单位'), coverW[0]), emptyTc(coverW[1])]),
+        tr([tc(t('施工单位'), coverW[0]), emptyTc(coverW[1])]),
+        tr([tc(t('合同号'), coverW[0]), emptyTc(coverW[1])])
+      ],
+      coverW
+    ),
+    heading('验收检查项（勾选写入主单元格）'),
+    table(
+      [
+        tr([tc(t('资料齐全'), checkW[0]), tc(t('☐'), checkW[1])]),
+        tr([tc(t('质量合格'), checkW[0]), tc(t('☐'), checkW[1])]),
+        tr([tc(t('安全文明'), checkW[0]), tc(t('☐'), checkW[1])])
+      ],
+      checkW
+    ),
+    heading('验收正文'),
+    table(
+      [
+        tr([tc(t('项目名称'), infoW[0]), emptyTc(infoW[1])]),
+        tr([tc(t('合同号'), infoW[0]), emptyTc(infoW[1])]),
+        tr([tc(t('建设单位'), infoW[0]), emptyTc(infoW[1])]),
+        tr([tc(t('施工单位'), infoW[0]), emptyTc(infoW[1])]),
+        tr([tc(t('监理单位'), infoW[0]), emptyTc(infoW[1])]),
+        tr([tc(t('验收结论'), infoW[0]), emptyTc(infoW[1])]),
+        tr([tc(t('质保条款'), infoW[0]), emptyTc(infoW[1])])
+      ],
+      infoW
+    )
   ].join('')
-  saveDocx('6.2_竣工验收报告.docx', '6.2 竣工验收报告', body)
+  saveDocx('6.2_竣工验收报告.docx', '竣工验收报告', body)
 }
 
 function save71() {
   const body = [
-    title('7.1 项目建设总结'),
-    headerBlock,
+    title('项目建设总结'),
+    para('项目名称：×××'),
+    para('本合同段建设总结稿排版较密，CellPatch 仅替换文首项目名称，其余章节留待人工校核。'),
     heading('一、项目概况'),
-    p(t('{overview}'), null),
+    para('（模板原文：请结合合同与批复填写项目概况。勿在程序中强行灌入长文以免打乱样式。）'),
     heading('二、建设过程'),
-    p(t('{progress}'), null),
+    para('（模板原文：建设过程概述。）'),
     heading('三、质量与安全'),
-    p(t('{quality}'), null),
+    para('（模板原文：质量与安全情况。）'),
     heading('四、问题与整改'),
-    p(t('{issues}'), null),
+    para('（模板原文：存在问题及整改。）'),
     heading('五、运维与移交'),
-    p(t('{next}'), null)
+    para('（模板原文：运维移交安排。）')
   ].join('')
-  saveDocx('7.1_项目建设总结.docx', '7.1 项目建设总结', body)
+  saveDocx('7.1_项目建设总结.docx', '项目建设总结', body)
+}
+
+function inventoryTable(titleText, padEmptyBeforeEllipsis) {
+  const cols = [800, 1400, 1400, 1000, 1200, 900, 700, 900, 1200]
+  const header = ['序号', '名称', '规格型号', '品牌', '部署位置', '单价', '数量', '合计', '备注']
+  const swHeader = ['序号', '名称', '厂商', '功能', '部署位置', '单价', '数量', '合计', '备注']
+  const heads = titleText.includes('软件') ? swHeader : header
+  const sum = cols.reduce((a, b) => a + b, 0)
+  const rows = [
+    tr([headerTc(titleText, sum, 9)]),
+    tr([
+      tc(t('项目名称'), cols[0]),
+      emptyTc(cols[1] + cols[2] + cols[3], 3),
+      tc(t('批复文号'), cols[4]),
+      emptyTc(cols[5] + cols[6] + cols[7] + cols[8], 4)
+    ]),
+    tr(heads.map((h, i) => headerTc(h, cols[i]))),
+    tr([tc(t('总计'), cols[0]), ...cols.slice(1).map((w) => emptyTc(w))]),
+    ...Array.from({ length: padEmptyBeforeEllipsis }, () => emptyRow(cols)),
+    ellipsisRow(cols)
+  ]
+  return table(rows, cols)
 }
 
 function save72() {
-  const hw = `<w:tr>
-    ${tc(t('{#hardware}{name}'), 2200)}
-    ${tc(t('{spec}'), 2200)}
-    ${tc(t('{qty}'), 1000)}
-    ${tc(t('{unit}'), 1000)}
-    ${tc(t('{remark}{/hardware}'), 2200)}
-  </w:tr>`
-  const sw = `<w:tr>
-    ${tc(t('{#software}{name}'), 2200)}
-    ${tc(t('{version}'), 1600)}
-    ${tc(t('{license}'), 1800)}
-    ${tc(t('{qty}'), 1000)}
-    ${tc(t('{remark}{/software}'), 2600)}
-  </w:tr>`
   const body = [
-    title('7.2 软硬件清单'),
-    headerBlock,
-    heading('硬件清单'),
-    table(
-      [
-        `<w:tr>${['名称', '规格型号', '数量', '单位', '备注'].map((h, i) => headerTc(h, [2200, 2200, 1000, 1000, 2200][i])).join('')}</w:tr>`,
-        hw
-      ],
-      [2200, 2200, 1000, 1000, 2200]
-    ),
-    heading('软件清单'),
-    table(
-      [
-        `<w:tr>${['名称', '版本', '授权', '数量', '备注'].map((h, i) => headerTc(h, [2200, 1600, 1800, 1000, 2600][i])).join('')}</w:tr>`,
-        sw
-      ],
-      [2200, 1600, 1800, 1000, 2600]
-    )
+    title('软硬件清单'),
+    inventoryTable('硬件配置清单', 2),
+    inventoryTable('软件配置清单', 5)
   ].join('')
-  saveDocx('7.2_软硬件清单.docx', '7.2 软硬件清单', body)
+  saveDocx('7.2_软硬件清单.docx', '软硬件清单', body)
 }
 
 save210()

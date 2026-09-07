@@ -131,4 +131,5 @@ export interface GenerateResult {
   path: string
   itemCode: string
   opened?: boolean
+  paths?: string[]
 }

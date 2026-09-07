@@ -160,9 +160,19 @@ async function main(): Promise<void> {
   const weeklyZip = new PizZip(weeklyBuf)
   const weeklyXml = weeklyZip.file('word/document.xml')?.asText() ?? ''
   assert(weeklyXml.includes('完成机柜就位') || weeklyXml.includes('核心交换机'), 'weekly docx aggregates log text')
+  assert(weeklyXml.includes('施工单位') || weeklyXml.includes('项目周报'), '2.12 retains week-report structure')
 
   const logDoc = studio.generateDocument(project.id, '2.10')
   assert(fs.existsSync(logDoc.path), '2.10 docx exists')
+  assert((logDoc.paths?.length ?? 1) >= 3, '2.10 one log → one file')
+  const logXml = new PizZip(fs.readFileSync(logDoc.path)).file('word/document.xml')?.asText() ?? ''
+  assert(logXml.includes('施工单位'), '2.10 retains 施工单位 header')
+  assert(logXml.includes('施工日志'), '2.10 retains 施工日志 header structure')
+  assert(
+    logXml.includes('完成机柜就位') || logXml.includes('核心交换机') || logXml.includes('配线架'),
+    '2.10 filled with a daily log'
+  )
+  assert(logXml.includes('某集成公司'), '2.10 contractor filled')
 
   const optionalBatch = studio.confirmItemsWithArtifacts(project.id)
   const afterOptional = studio.checkExport(project.id)
@@ -189,6 +199,18 @@ async function main(): Promise<void> {
       studio.addUpload(project.id, item.code, dummy, `${item.code}_${item.title}.txt`)
     }
   }
+
+  const hwPath = path.join(tmp, 'projects', project.id, 'generated', '7.2_软硬件清单.docx')
+  assert(fs.existsSync(hwPath), '7.2 docx generated')
+  const hwXml = new PizZip(fs.readFileSync(hwPath)).file('word/document.xml')?.asText() ?? ''
+  const tmpl72 = new PizZip(fs.readFileSync(path.join(templatesDir, '7.2_软硬件清单.docx'))).file(
+    'word/document.xml'
+  )!.asText()
+  assert(hwXml.includes('硬件配置清单'), '7.2 real-template fingerprint 硬件配置清单')
+  assert(hwXml.includes('TODO 硬件名称'), '7.2 fills cloned hardware row')
+  const totTmpl = (tmpl72.match(/总计/g) || []).length
+  const totGen = (hwXml.match(/总计/g) || []).length
+  assert(totGen === totTmpl, `7.2 must not clone 总计 rows (template=${totTmpl} generated=${totGen})`)
 
   const confirmed = studio.confirmItemsWithArtifacts(project.id)
   assert(confirmed > 0, 'confirmed some items')
@@ -253,6 +275,8 @@ async function main(): Promise<void> {
   assert(joined.includes('2.12_项目周报'), 'weekly folder/file in zip')
   assert(joined.includes('2.11_项目月报'), 'monthly folder/file in zip')
   assert(joined.includes('2.10_施工日志'), 'log folder in zip')
+  const logZipDocs = names.filter((n) => n.includes('2.10_施工日志') && n.endsWith('.docx'))
+  assert(logZipDocs.length >= 3, 'zip packs one 2.10 file per daily log')
   assert(joined.includes('2.1_开工报审表'), '2.1 zip folder uses 开工报审表')
   assert(!joined.includes('检验批'), 'zip must not use 检验批 folder names')
   assert(joined.includes('1.2_合同'), 'contract folder in zip')
