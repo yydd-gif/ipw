@@ -2,6 +2,8 @@
 
 本文面向**不熟命令行的 Windows 用户**。按编号做即可：先拿到代码，再装好 Node，最后在项目根目录跑三条命令。
 
+**请用「命令提示符」粘贴本文命令**（按 `Win` 键搜索「命令提示符」或 `cmd`）。Windows 11 默认的 PowerShell 也能用，但个别命令写法不同，文中已单独标出。
+
 仓库：<https://github.com/yydd-gif/ipw>（默认分支 **main**）  
 产品：验收到手（acceptance-studio）  
 需要：Node.js **20 及以上**（推荐 **22 LTS**；本机也曾用过 24，一般也可以）
@@ -36,12 +38,12 @@ npm -v
 | --- | --- |
 | 两个命令都成功，且 `node -v` 显示 `v20` 或更高（例如 `v22.x`、`v24.x`） | 系统 Node 可用。跳到 [第 1 节拿代码](#1-准备工作拿代码)，装 Node 可跳过。 |
 | 提示「不是内部或外部命令」，或报错找不到文件 | 系统 Node 没装好，或 PATH 坏了。走 [第 2 节](#2-安装-nodejs两条路径)。 |
-| `where node` 指向 `D:\Program Files\nodejs`，但该文件夹不存在 / 打不开 | **不要再用这个路径。** 走 [2.2 便携版应急](#22-备用系统-node-坏了便携版)。 |
+| `where.exe node` 指向 `D:\Program Files\nodejs`，但该文件夹不存在 / 打不开 | **不要再用这个路径。** 走 [2.2 便携版应急](#22-备用系统-node-坏了便携版)。 |
 
-查看 Node 实际指向哪里（可选）：
+查看 Node 实际指向哪里（可选；命令提示符和 PowerShell 都用这一行）：
 
 ```bat
-where node
+where.exe node
 ```
 
 **警告：不要依赖已损坏的 `D:\Program Files\nodejs`。** 即使 PATH 里还写着这个目录，也不要从那里运行 `node.exe`。
@@ -111,7 +113,7 @@ npm -v
 适用情况：
 
 - `node` / `npm` 提示不是内部命令
-- `where node` 指向 `D:\Program Files\nodejs`，但该目录不可用
+- `where.exe node` 指向 `D:\Program Files\nodejs`，但该目录不可用
 - 公司电脑不允许往 `Program Files` 里装软件
 
 **不要**再去修复或依赖 `D:\Program Files\nodejs`。改用「文档」下的便携版。
@@ -196,10 +198,10 @@ $env:Path = "$env:USERPROFILE\Documents\nodejs;" + $env:Path
 ```bat
 node -v
 npm -v
-where node
+where.exe node
 ```
 
-`where node` 的第一行应是 `...\Documents\nodejs\node.exe`，**不应**再是 `D:\Program Files\nodejs\node.exe`。
+`where.exe node` 的第一行应是 `...\Documents\nodejs\node.exe`，**不应**再是 `D:\Program Files\nodejs\node.exe`。
 
 写法乙：不改 PATH，用完整路径调用（把 `你的用户名` 换成实际用户名，或继续用 `%USERPROFILE%`）：
 
@@ -277,7 +279,7 @@ npm run dev
 说明当前窗口找不到 npm。
 
 1. 若刚用安装包装过 Node：**关掉终端，新开一个**，再试 `npm -v`。
-2. 若 `where npm` / `where node` 指向 `D:\Program Files\nodejs`：这个路径本机曾经损坏，**不要继续用**。改用 [2.2 便携版](#22-备用系统-node-坏了便携版)。
+2. 若 `where.exe npm` / `where.exe node` 指向 `D:\Program Files\nodejs`：这个路径本机曾经损坏，**不要继续用**。改用 [2.2 便携版](#22-备用系统-node-坏了便携版)。
 3. 使用便携版时，确认本窗口已经执行过 `set "PATH=...\Documents\nodejs;%PATH%"`，或改用 `npm.cmd` 的完整路径。
 
 ### 4.3 node 版本过低
@@ -286,7 +288,7 @@ npm run dev
 node -v
 ```
 
-若显示 `v18`、`v16` 或更低：本仓库需要 **Node.js 20+**（推荐 22）。请按第 2.1 节安装 LTS，或按 2.2 换成便携 22，并保证 `where node` 指向新的那份。
+若显示 `v18`、`v16` 或更低：本仓库需要 **Node.js 20+**（推荐 22）。请按第 2.1 节安装 LTS，或按 2.2 换成便携 22，并保证 `where.exe node` 指向新的那份。
 
 ### 4.4 postinstall 失败 / `templates` 里没有 .docx
 
@@ -327,14 +329,21 @@ npm config delete https-proxy
 
 ### 4.6 怎么确认自己在项目根目录
 
-在终端输入：
+在终端输入（命令提示符）：
 
 ```bat
-cd
+echo %CD%
 dir package.json
 ```
 
-`cd` 打印的路径应是代码文件夹（里面有 `package.json`）。若提示找不到 `package.json`，说明还没 `cd` 进去，或进错了子文件夹。
+PowerShell 用：
+
+```powershell
+Get-Location
+dir package.json
+```
+
+打印出来的路径应是代码文件夹（里面有 `package.json`）。若提示找不到 `package.json`，说明还没 `cd` 进去，或进错了子文件夹。
 
 ---
 
