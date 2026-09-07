@@ -11,27 +11,42 @@ fi
 
 base64 -d /tmp/core.b64 > /tmp/core-templates.zip
 python3 - <<'PY'
-import zipfile, pathlib, shutil, os
+import json, pathlib, zipfile, zlib
 root = pathlib.Path("templates")
 root.mkdir(exist_ok=True)
 zf = zipfile.ZipFile("/tmp/core-templates.zip")
-# Extract to a staging dir so a zip-root folder can be flattened.
-stage = pathlib.Path("/tmp/core-templates-extract")
-if stage.exists():
-    shutil.rmtree(stage)
-stage.mkdir()
-zf.extractall(stage)
-entries = [p for p in stage.iterdir() if p.name != "__MACOSX"]
-src = stage
-if len(entries) == 1 and entries[0].is_dir():
-    src = entries[0]
-for path in src.rglob("*"):
-    if path.is_dir() or path.name.startswith("."):
+
+def crc32(path: pathlib.Path) -> int:
+    return zlib.crc32(path.read_bytes()) & 0xFFFFFFFF
+
+def keep_layout_aligned_manifest(path: pathlib.Path) -> bool:
+    try:
+        data = json.loads(path.read_text())
+    except Exception:
+        return False
+    for tmpl in data.get("templates", []):
+        for scalar in tmpl.get("scalars", []):
+            if scalar.get("key") == "qs_check" and scalar.get("mode") == "afterLabel":
+                return True
+    return False
+
+for info in zf.infolist():
+    name = pathlib.Path(info.filename).name
+    if info.is_dir() or not name or name.startswith(".") or "__MACOSX" in info.filename:
         continue
-    rel = path.relative_to(src)
-    dest = root / rel
+    dest = root / name
     dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(path, dest)
+    try:
+        data = zf.read(info.filename)
+    except Exception as exc:
+        if dest.exists() and crc32(dest) == (info.CRC & 0xFFFFFFFF):
+            print(f"kept existing {dest} (zip member corrupt, CRC matches {info.CRC:08x})")
+            continue
+        raise SystemExit(f"failed to extract {info.filename}: {exc}") from exc
+    if dest.name == "manifest.json" and dest.exists() and keep_layout_aligned_manifest(dest):
+        print(f"kept existing {dest} (layout-aligned CellPatch coords)")
+        continue
+    dest.write_bytes(data)
     print("extracted", dest)
 PY
 
