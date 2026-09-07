@@ -1,3 +1,8 @@
+import {
+  canOpenExportSaveDialog,
+  exportBlockedMessage,
+  formatConfirmReadyToast
+} from '@shared/completeness'
 import type { CatalogVolumeState, ExportCheck, Project } from '@shared/types'
 import { StatusBadge } from '../components/StatusBadge'
 
@@ -5,7 +10,7 @@ export default function ExportView(props: {
   project: Project
   check: ExportCheck | null
   catalog: CatalogVolumeState[]
-  onRefresh: () => Promise<void> | void
+  onRefresh: () => Promise<ExportCheck | void> | void
   notify: (msg: string) => void
 }) {
   const check = props.check
@@ -42,9 +47,11 @@ export default function ExportView(props: {
           <button
             className="btn"
             onClick={async () => {
+              // 雷神: confirmReady (batch n, incl. optional) → refresh catalog+ExportCheck → toast.
+              // Header 「已确认」 stays required-only; toast never pretends n is that count.
               const n = await window.studio.confirmReady(props.project.id)
-              props.notify(`已确认 ${n} 条已有资料的条目`)
-              await props.onRefresh()
+              const latest = (await props.onRefresh()) ?? (await window.studio.checkExport(props.project.id))
+              props.notify(formatConfirmReadyToast(n, latest))
             }}
           >
             确认所有已有资料
@@ -53,6 +60,12 @@ export default function ExportView(props: {
             className="btn primary"
             onClick={async () => {
               try {
+                const latest = await window.studio.checkExport(props.project.id)
+                if (!canOpenExportSaveDialog(latest)) {
+                  props.notify(exportBlockedMessage(latest))
+                  await props.onRefresh()
+                  return
+                }
                 const result = await window.studio.exportZip(props.project.id)
                 if (result) props.notify(`已导出：${result.path}`)
                 await props.onRefresh()

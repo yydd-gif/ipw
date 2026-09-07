@@ -8,7 +8,7 @@ import {
   itemsForProjectType,
   volumeApplies
 } from '../shared/catalog'
-import { buildExportCheck } from '../shared/completeness'
+import { buildExportCheck, exportBlockedMessage } from '../shared/completeness'
 import { packAcceptanceZip } from './exporter'
 import { filterLogsByPeriod } from './logs'
 import type {
@@ -489,8 +489,7 @@ export class Studio {
     const project = this.getProject(projectId)
     const check = this.checkExport(projectId)
     if (!check.ok) {
-      const detail = check.blockers.map((b) => `${b.code} ${b.title}（${b.reason}）`).join('；')
-      throw new Error(`无法导出：仍有必填条目未完成。${detail}`)
+      throw new Error(exportBlockedMessage(check))
     }
 
     const out = packAcceptanceZip({

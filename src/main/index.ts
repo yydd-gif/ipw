@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { join } from 'node:path'
 import { existsSync } from 'node:fs'
 import { Studio } from '../core/studio'
+import { withExportSavePath } from '../shared/completeness'
 import type { DailyLogInput, ItemStatus, ProjectInput, WeeklyReportOptions } from '../shared/types'
 
 if (process.platform === 'linux') {
@@ -170,16 +171,22 @@ ipcMain.handle('studio:confirmReady', async (_e, projectId: string) =>
 ipcMain.handle('studio:exportZip', async (e, projectId: string) => {
   const s = await getStudio()
   const project = s.getProject(projectId)
+  const check = s.checkExport(projectId)
   const win = BrowserWindow.fromWebContents(e.sender)
-  const suggested = `${project.name}_验收资料包.zip`
-  const pick = await dialog.showSaveDialog(win ?? undefined!, {
-    title: '导出验收资料包',
-    defaultPath: suggested,
-    filters: [{ name: 'Zip', extensions: ['zip'] }]
-  })
-  if (pick.canceled || !pick.filePath) return null
-  const result = s.exportZip(projectId, pick.filePath)
-  shell.showItemInFolder(result.path)
+  const result = await withExportSavePath(
+    check,
+    async () => {
+      const pick = await dialog.showSaveDialog(win ?? undefined!, {
+        title: '导出验收资料包',
+        defaultPath: `${project.name}_验收资料包.zip`,
+        filters: [{ name: 'Zip', extensions: ['zip'] }]
+      })
+      if (pick.canceled || !pick.filePath) return null
+      return pick.filePath
+    },
+    (dest) => s.exportZip(projectId, dest)
+  )
+  if (result) shell.showItemInFolder(result.path)
   return result
 })
 

@@ -54,7 +54,7 @@ export default function App() {
     setCurrentId((id) => id ?? list[0]?.id ?? null)
   }, [])
 
-  const refreshProjectData = useCallback(async (projectId: string) => {
+  const refreshProjectData = useCallback(async (projectId: string): Promise<ExportCheck> => {
     const [logRows, cat, exp] = await Promise.all([
       window.studio.listLogs(projectId),
       window.studio.getCatalogState(projectId),
@@ -63,6 +63,7 @@ export default function App() {
     setLogs(logRows)
     setCatalog(cat)
     setCheck(exp)
+    return exp
   }, [])
 
   useEffect(() => {
@@ -139,7 +140,9 @@ export default function App() {
             <CatalogView
               project={current}
               catalog={catalog}
-              onRefresh={() => refreshProjectData(current.id)}
+              onRefresh={async () => {
+                await refreshProjectData(current.id)
+              }}
               notify={notify}
             />
           )}
@@ -147,7 +150,9 @@ export default function App() {
             <LogsView
               project={current}
               logs={logs}
-              onRefresh={() => refreshProjectData(current.id)}
+              onRefresh={async () => {
+                await refreshProjectData(current.id)
+              }}
               notify={notify}
             />
           )}

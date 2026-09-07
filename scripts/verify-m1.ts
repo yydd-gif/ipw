@@ -9,6 +9,11 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import PizZip from 'pizzip'
 import { itemsForProjectType } from '../src/shared/catalog'
+import {
+  canOpenExportSaveDialog,
+  formatConfirmReadyToast,
+  withExportSavePath
+} from '../src/shared/completeness'
 import { Studio } from '../src/core/studio'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -76,13 +81,74 @@ async function main(): Promise<void> {
   }
   assert(studio.listLogs(project.id).length >= 3, 'need ≥3 daily logs')
 
+  assert(
+    formatConfirmReadyToast(0, {
+      ok: false,
+      blockers: [],
+      confirmed: 0,
+      required: 23,
+      waived: 0
+    }) === '没有可确认的资料（请先上传或生成文件）',
+    'n=0 toast copy'
+  )
+  assert(
+    formatConfirmReadyToast(3, {
+      ok: false,
+      blockers: [{ code: '1.2', title: '合同', reason: '尚未提供资料' }],
+      confirmed: 1,
+      required: 23,
+      waived: 0
+    }) === '本批已确认 3 条资料。必填进度 1/23，尚不能出包',
+    'n>0 incomplete toast copy uses 本批已确认 and ExportCheck progress'
+  )
+  assert(
+    formatConfirmReadyToast(5, {
+      ok: true,
+      blockers: [],
+      confirmed: 23,
+      required: 23,
+      waived: 0
+    }) === '本批已确认 5 条资料。必填已齐，可以出包',
+    'n>0 complete toast copy'
+  )
+
+  const earlyCheck = studio.checkExport(project.id)
+  assert(!earlyCheck.ok, 'export check fails while required items are incomplete')
+  assert(
+    !canOpenExportSaveDialog(earlyCheck),
+    'save dialog must stay closed while required items are incomplete'
+  )
+  const none = studio.confirmItemsWithArtifacts(project.id)
+  assert(none === 0, 'batch confirm is 0 before any artifacts')
+  assert(
+    formatConfirmReadyToast(none, earlyCheck) === '没有可确认的资料（请先上传或生成文件）',
+    'empty batch uses n=0 copy, not header confirmed count'
+  )
+
+  let saveDialogOpened = false
+  let blockedBeforeDialog = false
+  try {
+    await withExportSavePath(
+      earlyCheck,
+      async () => {
+        saveDialogOpened = true
+        return path.join(tmp, 'too-early.zip')
+      },
+      (dest) => studio.exportZip(project.id, dest)
+    )
+  } catch {
+    blockedBeforeDialog = true
+  }
+  assert(blockedBeforeDialog, 'export must block while required items are incomplete')
+  assert(!saveDialogOpened, 'save dialog must not open before completeness passes')
+
   let blocked = false
   try {
     studio.exportZip(project.id, path.join(tmp, 'too-early.zip'))
   } catch {
     blocked = true
   }
-  assert(blocked, 'export must block while required items are incomplete')
+  assert(blocked, 'exportZip must still throw while required items are incomplete')
 
   const weekly = studio.generateWeeklyReport(project.id, {
     period_start: '2026-09-01',
@@ -97,6 +163,20 @@ async function main(): Promise<void> {
 
   const logDoc = studio.generateDocument(project.id, '2.10')
   assert(fs.existsSync(logDoc.path), '2.10 docx exists')
+
+  const optionalBatch = studio.confirmItemsWithArtifacts(project.id)
+  const afterOptional = studio.checkExport(project.id)
+  assert(optionalBatch > 0, 'optional weekly/log artifacts are in the batch count')
+  assert(!afterOptional.ok, 'optional confirms do not make export ready')
+  assert(
+    afterOptional.confirmed === 0,
+    'header ExportCheck.confirmed stays required-only after optional batch'
+  )
+  assert(
+    formatConfirmReadyToast(optionalBatch, afterOptional) ===
+      `本批已确认 ${optionalBatch} 条资料。必填进度 ${afterOptional.confirmed}/${afterOptional.required}，尚不能出包`,
+    'incomplete toast reports batch n and required progress separately'
+  )
 
   for (const item of itemsForProjectType('hybrid')) {
     if (item.produceType === 'template' || item.produceType === 'derived') {
@@ -114,6 +194,20 @@ async function main(): Promise<void> {
   assert(confirmed > 0, 'confirmed some items')
   const check = studio.checkExport(project.id)
   assert(check.ok, `export should be allowed, blockers=${JSON.stringify(check.blockers)}`)
+  assert(canOpenExportSaveDialog(check), 'save dialog may open only after completeness passes')
+  assert(
+    confirmed !== check.confirmed,
+    'batch n includes optional artifacts; header ExportCheck.confirmed is required-only'
+  )
+  assert(
+    formatConfirmReadyToast(confirmed, check) ===
+      `本批已确认 ${confirmed} 条资料。必填已齐，可以出包`,
+    'ready toast reports batch n and does not reuse header confirmed count'
+  )
+  assert(
+    !formatConfirmReadyToast(confirmed, check).includes(`已确认 ${check.confirmed} 条已有资料`),
+    'must not pretend batch n is the header confirmed count'
+  )
 
   const catalogState = studio.getCatalogState(project.id)
   const byCode = new Map(
@@ -140,8 +234,17 @@ async function main(): Promise<void> {
   studio.setItemStatus(project.id, '2.1', 'confirmed')
 
   const zipPath = path.join(tmp, 'out.zip')
-  const exported = studio.exportZip(project.id, zipPath)
-  assert(fs.existsSync(exported.path), 'zip exists')
+  let allowedDialogOpened = false
+  const exported = await withExportSavePath(
+    studio.checkExport(project.id),
+    async () => {
+      allowedDialogOpened = true
+      return zipPath
+    },
+    (dest) => studio.exportZip(project.id, dest)
+  )
+  assert(allowedDialogOpened, 'save dialog opens when export is allowed')
+  assert(exported && fs.existsSync(exported.path), 'zip exists')
 
   const zip = new PizZip(fs.readFileSync(zipPath))
   const names = Object.keys(zip.files)
