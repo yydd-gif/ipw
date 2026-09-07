@@ -203,20 +203,19 @@ function emptyRow(widths) {
 
 function save210() {
   const w = [2200, 2500, 1800, 2800]
+  const span = w[0] + w[1] + w[2] + w[3]
   const body = [
     title('施工日志'),
-    para('工程名称：×××'),
-    para('编号：YS-XXXXXX'),
+    para('工程名称：×××工程'),
+    para('编号：项目编号-A25-流水号'),
     table(
       [
         tr([tc(t('施工单位'), w[0]), emptyTc(w[1]), tc(t('日期'), w[2]), emptyTc(w[3])]),
         tr([tc(t('天气'), w[0]), emptyTc(w[1] + w[2] + w[3], 3)]),
         tr([tc(t('施工地点'), w[0]), emptyTc(w[1] + w[2] + w[3], 3)]),
-        tr([headerTc('当日完成工作内容', w[0] + w[1] + w[2] + w[3], 4)]),
-        tr([emptyTc(w[0] + w[1] + w[2] + w[3], 4)]),
-        tr([tc(t('质量安全检查：                    施工人数：'), w[0] + w[1] + w[2] + w[3], 4)]),
-        tr([tc(t('存在问题：'), w[0] + w[1] + w[2] + w[3], 4)]),
-        tr([tc(t('协调事项：'), w[0] + w[1] + w[2] + w[3], 4)])
+        tr([tc(t('今日完成工作：'), span, 4)]),
+        tr([emptyTc(span, 4)]),
+        tr([tc(t('施工人数：  个    现场问题：    需协调事项：'), span, 4)])
       ],
       w
     )
@@ -224,25 +223,20 @@ function save210() {
   saveDocx('2.10_施工日志.docx', '施工日志', body)
 }
 
-function savePeriod(code, name, file) {
+function savePeriod(code, name, file, docNoToken) {
   const w = [2200, 2500, 1800, 2800]
-  const span = w[0] + w[1] + w[2] + w[3]
   const body = [
     title(name),
-    para('工程名称：×××'),
-    para('编号：YS-XXXXXX'),
+    para('工程名称：×××工程'),
+    para(`编号：${docNoToken}`),
     table(
       [
         tr([tc(t('施工单位'), w[0]), emptyTc(w[1]), tc(t('截止日期'), w[2]), emptyTc(w[3])]),
         tr([tc(t('当前阶段'), w[0]), emptyTc(w[1] + w[2] + w[3], 3)]),
-        tr([headerTc('本期完成工作', span, 4)]),
-        tr([emptyTc(span, 4)]),
-        tr([headerTc('未完事项', span, 4)]),
-        tr([emptyTc(span, 4)]),
-        tr([headerTc('存在问题', span, 4)]),
-        tr([emptyTc(span, 4)]),
-        tr([headerTc('下期计划', span, 4)]),
-        tr([emptyTc(span, 4)])
+        tr([tc(t('本期完成工作'), w[0]), emptyTc(w[1] + w[2] + w[3], 3)]),
+        tr([tc(t('未完事项'), w[0]), emptyTc(w[1] + w[2] + w[3], 3)]),
+        tr([tc(t('存在问题'), w[0]), emptyTc(w[1] + w[2] + w[3], 3)]),
+        tr([tc(t('下期计划'), w[0]), emptyTc(w[1] + w[2] + w[3], 3)])
       ],
       w
     )
@@ -254,19 +248,13 @@ function save27() {
   const w = [2800, 2200, 2200, 2100]
   const body = [
     title('设备开箱检验记录'),
-    para('工程名称：×××'),
-    para('编号：YS-XXXXXX'),
+    para('工程名称：×××工程'),
+    para('编号：项目编号-A12-流水号'),
     table(
       [
-        tr([tc(t('施工单位'), w[0]), emptyTc(w[1]), tc(t('日期'), w[2]), emptyTc(w[3])]),
-        tr([tc(t('安装地点'), w[0]), emptyTc(w[1]), tc(t('设备名称'), w[2]), emptyTc(w[3])]),
-        tr([tc(t('出厂编号'), w[0]), emptyTc(w[1] + w[2] + w[3], 3)]),
-        tr([tc(t('包装完好'), w[0]), tc(t('☐'), w[1] + w[2] + w[3], 3)]),
-        tr([tc(t('外观无损'), w[0]), tc(t('☐'), w[1] + w[2] + w[3], 3)]),
-        tr([tc(t('配件齐全'), w[0]), tc(t('☐'), w[1] + w[2] + w[3], 3)]),
-        tr([tc(t('随机资料齐全'), w[0]), tc(t('☐'), w[1] + w[2] + w[3], 3)]),
-        tr([tc(t('型号规格与合同相符'), w[0]), tc(t('☐'), w[1] + w[2] + w[3], 3)]),
-        tr([tc(t('备注'), w[0]), emptyTc(w[1] + w[2] + w[3], 3)])
+        tr([tc(t('建设单位'), w[0]), emptyTc(w[1]), tc(t('监理单位'), w[2]), emptyTc(w[3])]),
+        tr([tc(t('施工单位'), w[0]), emptyTc(w[1]), tc(t('安装地点'), w[2]), emptyTc(w[3])]),
+        tr([tc(t('出厂编号'), w[0]), emptyTc(w[1]), tc(t('设备名称'), w[2]), emptyTc(w[3])])
       ],
       w
     )
@@ -275,14 +263,16 @@ function save27() {
 }
 
 function save28() {
-  const w = [2200, 2000, 1800, 1600, 1600]
+  const w = [1600, 1600, 1600, 1600, 1400, 1400]
   const body = [
     title('设备安装记录'),
-    para('工程名称：×××'),
-    para('编号：YS-XXXXXX'),
+    para('工程名称：×××工程'),
+    para('编号：项目编号-A13-流水号'),
     table(
       [
-        tr(['设备名称', '安装地点', '安装人', '日期', '结果'].map((h, i) => headerTc(h, w[i]))),
+        tr([tc(t('安装地点'), w[0]), emptyTc(w[1] + w[2], 2), tc(t('日期'), w[3]), emptyTc(w[4] + w[5], 2)]),
+        tr([tc(t('安装人'), w[0]), emptyTc(w[1] + w[2], 2), tc(t('监理人员'), w[3]), emptyTc(w[4] + w[5], 2)]),
+        tr(['设备名称', '配件', '安装地点', '工艺', '供电', '记录'].map((h, i) => headerTc(h, w[i]))),
         ellipsisRow(w)
       ],
       w
@@ -300,11 +290,10 @@ function save62() {
     heading('封面信息'),
     table(
       [
-        tr([tc(t('项目名称'), coverW[0]), emptyTc(coverW[1])]),
+        tr([headerTc('验收单位', coverW[0] + coverW[1], 2)]),
         tr([tc(t('建设单位'), coverW[0]), emptyTc(coverW[1])]),
         tr([tc(t('监理单位'), coverW[0]), emptyTc(coverW[1])]),
-        tr([tc(t('施工单位'), coverW[0]), emptyTc(coverW[1])]),
-        tr([tc(t('合同号'), coverW[0]), emptyTc(coverW[1])])
+        tr([tc(t('施工单位'), coverW[0]), emptyTc(coverW[1])])
       ],
       coverW
     ),
@@ -323,8 +312,8 @@ function save62() {
         tr([tc(t('项目名称'), infoW[0]), emptyTc(infoW[1])]),
         tr([tc(t('合同号'), infoW[0]), emptyTc(infoW[1])]),
         tr([tc(t('建设单位'), infoW[0]), emptyTc(infoW[1])]),
-        tr([tc(t('施工单位'), infoW[0]), emptyTc(infoW[1])]),
         tr([tc(t('监理单位'), infoW[0]), emptyTc(infoW[1])]),
+        tr([tc(t('施工单位'), infoW[0]), emptyTc(infoW[1])]),
         tr([tc(t('验收结论'), infoW[0]), emptyTc(infoW[1])]),
         tr([tc(t('质保条款'), infoW[0]), emptyTc(infoW[1])])
       ],
@@ -337,7 +326,7 @@ function save62() {
 function save71() {
   const body = [
     title('项目建设总结'),
-    para('项目名称：×××'),
+    para('XXX项目情况简介'),
     para('本合同段建设总结稿排版较密，CellPatch 仅替换文首项目名称，其余章节留待人工校核。'),
     heading('一、项目概况'),
     para('（模板原文：请结合合同与批复填写项目概况。勿在程序中强行灌入长文以免打乱样式。）'),
@@ -378,6 +367,7 @@ function inventoryTable(titleText, padEmptyBeforeEllipsis) {
 function save72() {
   const body = [
     title('软硬件清单'),
+    para('XXX'),
     inventoryTable('硬件配置清单', 2),
     inventoryTable('软件配置清单', 5)
   ].join('')
@@ -385,8 +375,8 @@ function save72() {
 }
 
 save210()
-savePeriod('2.11', '项目月报', '2.11_项目月报.docx')
-savePeriod('2.12', '项目周报', '2.12_项目周报.docx')
+savePeriod('2.11', '项目月报', '2.11_项目月报.docx', '项目编号-A26-流水号')
+savePeriod('2.12', '项目周报', '2.12_项目周报.docx', '项目编号-A25-流水号')
 save27()
 save28()
 save62()

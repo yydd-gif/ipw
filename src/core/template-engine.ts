@@ -112,7 +112,7 @@ export function fillDocx(
     code: options?.code,
     fileName: path.basename(templatePath)
   })
-  const mode = entry?.fillMode ?? (entry ? 'cell' : 'placeholder')
+  const mode = entry?.fillMode ?? manifest.fillDefault ?? (entry ? 'cell' : 'placeholder')
   if (mode === 'cell' && entry) {
     return fillDocxCellPatch(templatePath, data, entry)
   }
@@ -199,18 +199,38 @@ export function buildTemplateData(
   }
 
   if (item.code === '2.8') {
-    const rows = Array.isArray(payload.rows) && payload.rows.length > 0
-      ? payload.rows
-      : [
-          {
-            device_name: 'TODO 设备名称',
-            location: payload.location || '',
-            installer: payload.installer || '',
-            date: payload.date || '',
-            result: '合格'
-          }
-        ]
-    return { ...base, rows }
+    const rawRows =
+      Array.isArray(payload.rows) && payload.rows.length > 0
+        ? (payload.rows as Record<string, unknown>[])
+        : [
+            {
+              device_name: 'TODO 设备名称',
+              location: payload.location || '',
+              installer: payload.installer || '',
+              date: payload.date || '',
+              result: '合格'
+            }
+          ]
+    const first = asRecord(rawRows[0])
+    const rows = rawRows.map((row) => {
+      const r = asRecord(row)
+      return {
+        device_name: pickStr(r, 'device_name'),
+        parts: pickStr(r, 'parts'),
+        location: pickStr(r, 'location'),
+        process: pickStr(r, 'process', 'result'),
+        power: pickStr(r, 'power'),
+        record: pickStr(r, 'record', 'installer')
+      }
+    })
+    return {
+      ...base,
+      location: pickStr(asRecord(payload), 'location') || pickStr(first, 'location') || '',
+      date: pickStr(asRecord(payload), 'date') || pickStr(first, 'date') || '',
+      installer: pickStr(asRecord(payload), 'installer') || pickStr(first, 'installer') || '',
+      supervisor_person: pickStr(asRecord(payload), 'supervisor_person') || project.supervisor || '',
+      rows
+    }
   }
 
   if (item.code === '6.2') {

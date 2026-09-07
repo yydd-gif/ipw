@@ -50,8 +50,10 @@ function applyMode(
   if (m === 'replace') return value
   if (m === 'replaceToken') {
     const token = spec.token || '×××'
-    if (original.includes(token)) return original.split(token).join(value)
-    return original
+    if (!original.includes(token)) return original
+    const unitSuffix = token.length === 1 && /[\u4e00-\u9fff]/.test(token) && !value.includes(token)
+    const replacement = unitSuffix ? `${value}${token}` : value
+    return original.split(token).join(replacement)
   }
   const label = spec.label || ''
   if (!label) return value
@@ -208,7 +210,6 @@ function cloneDataRows(tableFull: string, spec: TableFillSpec, data: Record<stri
   const items = Array.isArray(rowsPayload) ? (rowsPayload as Record<string, unknown>[]) : []
   if (items.length === 0) return tableFull
 
-  const tbl = asElement(tableFull, 'w:tbl')
   const rows = getRows(tableFull)
   const idx = resolveTemplateRowIndex(rows, spec.rowTemplateRow)
   if (idx < 0 || !rows[idx]) {

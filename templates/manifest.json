@@ -1,191 +1,147 @@
 {
   "version": 1,
-  "templates": {
-    "2.7": {
-      "file": "2.7_设备开箱检验记录.docx",
-      "fillMode": "cell",
-      "paragraphs": [
-        { "paraIndex": 1, "field": "project_name", "mode": "replaceToken", "token": "×××", "fallbackScan": true },
-        { "paraIndex": 2, "field": "doc_no", "mode": "replaceToken", "token": "YS-XXXXXX", "fallbackScan": true }
-      ],
-      "scalars": [
-        { "table": 0, "row": 0, "col": 1, "field": "contractor", "mode": "replace" },
-        { "table": 0, "row": 0, "col": 3, "field": "date", "mode": "replace" },
-        { "table": 0, "row": 1, "col": 1, "field": "location", "mode": "replace" },
-        { "table": 0, "row": 1, "col": 3, "field": "device_name", "mode": "replace" },
-        { "table": 0, "row": 2, "col": 1, "field": "serial", "mode": "replace" },
-        { "table": 0, "row": 3, "col": 1, "field": "packaging_ok", "mode": "replace" },
-        { "table": 0, "row": 4, "col": 1, "field": "appearance_ok", "mode": "replace" },
-        { "table": 0, "row": 5, "col": 1, "field": "accessories_ok", "mode": "replace" },
-        { "table": 0, "row": 6, "col": 1, "field": "docs_ok", "mode": "replace" },
-        { "table": 0, "row": 7, "col": 1, "field": "model_ok", "mode": "replace" },
-        { "table": 0, "row": 8, "col": 1, "field": "remark", "mode": "replace" }
-      ],
-      "tables": []
-    },
-    "2.8": {
-      "file": "2.8_设备安装记录.docx",
-      "fillMode": "cell",
-      "paragraphs": [
-        { "paraIndex": 1, "field": "project_name", "mode": "replaceToken", "token": "×××", "fallbackScan": true },
-        { "paraIndex": 2, "field": "doc_no", "mode": "replaceToken", "token": "YS-XXXXXX", "fallbackScan": true }
-      ],
-      "scalars": [],
-      "tables": [
-        {
-          "id": "rows",
-          "tableIndex": 0,
-          "headerRow": 0,
-          "rowTemplateRow": 1,
-          "columns": [
-            { "col": 0, "field": "device_name" },
-            { "col": 1, "field": "location" },
-            { "col": 2, "field": "installer" },
-            { "col": 3, "field": "date" },
-            { "col": 4, "field": "result" }
-          ]
-        }
-      ]
-    },
-    "2.10": {
+  "fillDefault": "cell",
+  "templates": [
+    {
+      "code": "2.10",
       "file": "2.10_施工日志.docx",
       "fillMode": "cell",
       "paragraphs": [
-        { "paraIndex": 1, "field": "project_name", "mode": "replaceToken", "token": "×××", "fallbackScan": true },
-        { "paraIndex": 2, "field": "doc_no", "mode": "replaceToken", "token": "YS-XXXXXX", "fallbackScan": true }
+        {"key": "project_name", "paraIndex": 1, "replacePattern": "×××工程"},
+        {"key": "doc_no", "paraIndex": 2, "replacePattern": "项目编号-A25-流水号"}
       ],
       "scalars": [
-        { "table": 0, "row": 0, "col": 1, "field": "contractor", "mode": "replace" },
-        { "table": 0, "row": 0, "col": 3, "field": "date", "mode": "replace" },
-        { "table": 0, "row": 1, "col": 1, "field": "weather", "mode": "replace" },
-        { "table": 0, "row": 2, "col": 1, "field": "location", "mode": "replace" },
-        { "table": 0, "row": 4, "col": 0, "field": "work_done", "mode": "replace" },
-        { "table": 0, "row": 5, "col": 0, "field": "qs_check", "mode": "afterLabel", "label": "质量安全检查：" },
-        { "table": 0, "row": 5, "col": 0, "field": "crew_count", "mode": "afterLabel", "label": "施工人数：" },
-        { "table": 0, "row": 6, "col": 0, "field": "issues", "mode": "afterLabel", "label": "存在问题：" },
-        { "table": 0, "row": 7, "col": 0, "field": "coordination", "mode": "afterLabel", "label": "协调事项：" }
+        {"key": "contractor", "table": 0, "row": 0, "col": 1},
+        {"key": "date", "table": 0, "row": 0, "col": 3},
+        {"key": "weather", "table": 0, "row": 1, "col": 1},
+        {"key": "location", "table": 0, "row": 2, "col": 1},
+        {"key": "work_done", "table": 0, "row": 3, "col": 0, "mode": "appendAfterLabel", "label": "今日完成工作："},
+        {"key": "qs_check", "table": 0, "row": 4, "col": 0, "mode": "replace"},
+        {"key": "crew_count", "table": 0, "row": 5, "col": 0, "mode": "replaceToken", "token": "个"},
+        {"key": "issues", "table": 0, "row": 5, "col": 0, "mode": "afterLabel", "label": "现场问题："},
+        {"key": "coordination", "table": 0, "row": 5, "col": 0, "mode": "afterLabel", "label": "需协调事项："}
       ],
       "tables": []
     },
-    "2.11": {
-      "file": "2.11_项目月报.docx",
-      "fillMode": "cell",
-      "paragraphs": [
-        { "paraIndex": 1, "field": "project_name", "mode": "replaceToken", "token": "×××", "fallbackScan": true },
-        { "paraIndex": 2, "field": "doc_no", "mode": "replaceToken", "token": "YS-XXXXXX", "fallbackScan": true }
-      ],
-      "scalars": [
-        { "table": 0, "row": 0, "col": 1, "field": "contractor", "mode": "replace" },
-        { "table": 0, "row": 0, "col": 3, "field": "period_end", "mode": "replace" },
-        { "table": 0, "row": 1, "col": 1, "field": "phase", "mode": "replace" },
-        { "table": 0, "row": 3, "col": 0, "field": "done", "mode": "replace" },
-        { "table": 0, "row": 5, "col": 0, "field": "undone", "mode": "replace" },
-        { "table": 0, "row": 7, "col": 0, "field": "issues", "mode": "replace" },
-        { "table": 0, "row": 9, "col": 0, "field": "plan", "mode": "replace" }
-      ],
-      "tables": []
-    },
-    "2.12": {
+    {
+      "code": "2.12",
       "file": "2.12_项目周报.docx",
       "fillMode": "cell",
       "paragraphs": [
-        { "paraIndex": 1, "field": "project_name", "mode": "replaceToken", "token": "×××", "fallbackScan": true },
-        { "paraIndex": 2, "field": "doc_no", "mode": "replaceToken", "token": "YS-XXXXXX", "fallbackScan": true }
+        {"key": "project_name", "paraIndex": 1, "replacePattern": "×××工程"},
+        {"key": "doc_no", "paraIndex": 2, "replacePattern": "项目编号-A25-流水号"}
       ],
       "scalars": [
-        { "table": 0, "row": 0, "col": 1, "field": "contractor", "mode": "replace" },
-        { "table": 0, "row": 0, "col": 3, "field": "period_end", "mode": "replace" },
-        { "table": 0, "row": 1, "col": 1, "field": "phase", "mode": "replace" },
-        { "table": 0, "row": 3, "col": 0, "field": "done", "mode": "replace" },
-        { "table": 0, "row": 5, "col": 0, "field": "undone", "mode": "replace" },
-        { "table": 0, "row": 7, "col": 0, "field": "issues", "mode": "replace" },
-        { "table": 0, "row": 9, "col": 0, "field": "plan", "mode": "replace" }
+        {"key": "contractor", "table": 0, "row": 0, "col": 1},
+        {"key": "period_end", "table": 0, "row": 0, "col": 3},
+        {"key": "phase", "table": 0, "row": 1, "col": 1},
+        {"key": "done", "table": 0, "row": 2, "col": 1},
+        {"key": "undone", "table": 0, "row": 3, "col": 1},
+        {"key": "issues", "table": 0, "row": 4, "col": 1},
+        {"key": "plan", "table": 0, "row": 5, "col": 1}
       ],
       "tables": []
     },
-    "6.2": {
+    {
+      "code": "2.11",
+      "file": "2.11_项目月报.docx",
+      "fillMode": "cell",
+      "paragraphs": [
+        {"key": "project_name", "paraIndex": 1, "replacePattern": "×××工程"},
+        {"key": "doc_no", "paraIndex": 2, "replacePattern": "项目编号-A26-流水号"}
+      ],
+      "scalars": [
+        {"key": "contractor", "table": 0, "row": 0, "col": 1},
+        {"key": "period_end", "table": 0, "row": 0, "col": 3},
+        {"key": "phase", "table": 0, "row": 1, "col": 1},
+        {"key": "done", "table": 0, "row": 2, "col": 1},
+        {"key": "undone", "table": 0, "row": 3, "col": 1},
+        {"key": "issues", "table": 0, "row": 4, "col": 1},
+        {"key": "plan", "table": 0, "row": 5, "col": 1}
+      ],
+      "tables": []
+    },
+    {
+      "code": "2.7",
+      "file": "2.7_设备开箱检验记录.docx",
+      "fillMode": "cell",
+      "paragraphs": [
+        {"key": "project_name", "paraIndex": 1, "replacePattern": "×××工程"},
+        {"key": "doc_no", "paraIndex": 2, "replacePattern": "项目编号-A12-流水号"}
+      ],
+      "scalars": [
+        {"key": "owner", "table": 0, "row": 0, "col": 1},
+        {"key": "supervisor", "table": 0, "row": 0, "col": 3},
+        {"key": "contractor", "table": 0, "row": 1, "col": 1},
+        {"key": "location", "table": 0, "row": 1, "col": 3},
+        {"key": "serial", "table": 0, "row": 2, "col": 1},
+        {"key": "device_name", "table": 0, "row": 2, "col": 3}
+      ],
+      "tables": []
+    },
+    {
+      "code": "2.8",
+      "file": "2.8_设备安装记录.docx",
+      "fillMode": "cell",
+      "paragraphs": [
+        {"key": "project_name", "paraIndex": 1, "replacePattern": "×××工程"},
+        {"key": "doc_no", "paraIndex": 2, "replacePattern": "项目编号-A13-流水号"}
+      ],
+      "scalars": [
+        {"key": "location", "table": 0, "row": 0, "col": 1},
+        {"key": "date", "table": 0, "row": 0, "col": 3},
+        {"key": "installer", "table": 0, "row": 1, "col": 1},
+        {"key": "supervisor_person", "table": 0, "row": 1, "col": 3}
+      ],
+      "tables": [
+        {"id": "rows", "tableIndex": 0, "headerRow": 2, "rowTemplateRow": 3, "columns": ["device_name", "parts", "location", "process", "power", "record"]}
+      ]
+    },
+    {
+      "code": "6.2",
       "file": "6.2_竣工验收报告.docx",
       "fillMode": "cell",
       "paragraphs": [],
       "scalars": [
-        { "table": 0, "row": 0, "col": 1, "field": "project_name", "mode": "replace" },
-        { "table": 0, "row": 1, "col": 1, "field": "owner", "mode": "replace" },
-        { "table": 0, "row": 2, "col": 1, "field": "supervisor", "mode": "replace" },
-        { "table": 0, "row": 3, "col": 1, "field": "contractor", "mode": "replace" },
-        { "table": 0, "row": 4, "col": 1, "field": "contract_no", "mode": "replace" },
-        { "table": 1, "row": 0, "col": 1, "field": "docs_complete", "mode": "checkbox" },
-        { "table": 1, "row": 1, "col": 1, "field": "quality_ok", "mode": "checkbox" },
-        { "table": 1, "row": 2, "col": 1, "field": "safety_ok", "mode": "checkbox" },
-        { "table": 2, "row": 0, "col": 1, "field": "project_name", "mode": "replace" },
-        { "table": 2, "row": 1, "col": 1, "field": "contract_no", "mode": "replace" },
-        { "table": 2, "row": 2, "col": 1, "field": "owner", "mode": "replace" },
-        { "table": 2, "row": 3, "col": 1, "field": "contractor", "mode": "replace" },
-        { "table": 2, "row": 4, "col": 1, "field": "supervisor", "mode": "replace" },
-        { "table": 2, "row": 5, "col": 1, "field": "conclusion", "mode": "replace" },
-        { "table": 2, "row": 6, "col": 1, "field": "warranty", "mode": "replace" }
+        {"key": "owner", "table": 0, "row": 1, "col": 1},
+        {"key": "supervisor", "table": 0, "row": 2, "col": 1},
+        {"key": "contractor", "table": 0, "row": 3, "col": 1},
+        {"key": "project_name", "table": 2, "row": 0, "col": 1},
+        {"key": "contract_no", "table": 2, "row": 1, "col": 1},
+        {"key": "owner", "table": 2, "row": 2, "col": 1},
+        {"key": "supervisor", "table": 2, "row": 3, "col": 1},
+        {"key": "contractor", "table": 2, "row": 4, "col": 1}
       ],
       "tables": []
     },
-    "7.1": {
+    {
+      "code": "7.1",
       "file": "7.1_项目建设总结.docx",
       "fillMode": "cell",
-      "patchHeaders": true,
-      "layoutRisk": "Real 项目建设总结 layouts are dense (TOC, section breaks, mixed runs). M1.1 only replaces 文首 项目名称 (×××). Overview/progress/quality/issues/next are NOT patched — human layout review is required before treating 7.1 as camera-ready.",
       "paragraphs": [
-        { "paraIndex": 1, "field": "project_name", "mode": "replaceToken", "token": "×××", "fallbackScan": true }
+        {"key": "project_name", "paraIndex": 1, "replacePattern": "XXX项目情况简介"}
       ],
       "scalars": [],
-      "tables": []
+      "tables": [],
+      "notes": "Mostly free-form paragraphs; layout risk"
     },
-    "7.2": {
+    {
+      "code": "7.2",
       "file": "7.2_软硬件清单.docx",
       "fillMode": "cell",
-      "paragraphs": [],
-      "scalars": [],
+      "paragraphs": [
+        {"key": "project_name", "paraIndex": 1, "replacePattern": "XXX"}
+      ],
+      "scalars": [
+        {"key": "project_name", "table": 0, "row": 1, "col": 1},
+        {"key": "approval_no", "table": 0, "row": 1, "col": 3},
+        {"key": "project_name", "table": 1, "row": 1, "col": 1},
+        {"key": "approval_no", "table": 1, "row": 1, "col": 3}
+      ],
       "tables": [
-        {
-          "id": "hardware",
-          "tableIndex": 0,
-          "headerRow": 2,
-          "rowTemplateRow": 6,
-          "columns": [
-            { "col": 0, "field": "index" },
-            { "col": 1, "field": "name" },
-            { "col": 2, "field": "spec" },
-            { "col": 3, "field": "brand" },
-            { "col": 4, "field": "deploy" },
-            { "col": 5, "field": "unit_price" },
-            { "col": 6, "field": "qty" },
-            { "col": 7, "field": "total" },
-            { "col": 8, "field": "note" }
-          ],
-          "scalars": [
-            { "row": 1, "col": 1, "field": "project_name", "mode": "replace" },
-            { "row": 1, "col": 3, "field": "approval_no", "mode": "replace" }
-          ]
-        },
-        {
-          "id": "software",
-          "tableIndex": 1,
-          "headerRow": 2,
-          "rowTemplateRow": 9,
-          "columns": [
-            { "col": 0, "field": "index" },
-            { "col": 1, "field": "name" },
-            { "col": 2, "field": "vendor" },
-            { "col": 3, "field": "func" },
-            { "col": 4, "field": "deploy" },
-            { "col": 5, "field": "unit_price" },
-            { "col": 6, "field": "qty" },
-            { "col": 7, "field": "total" },
-            { "col": 8, "field": "note" }
-          ],
-          "scalars": [
-            { "row": 1, "col": 1, "field": "project_name", "mode": "replace" },
-            { "row": 1, "col": 3, "field": "approval_no", "mode": "replace" }
-          ]
-        }
+        {"id": "hardware", "tableIndex": 0, "headerRow": 2, "rowTemplateRow": 6, "columns": ["index", "name", "spec", "brand", "deploy", "unit_price", "qty", "total", "note"]},
+        {"id": "software", "tableIndex": 1, "headerRow": 2, "rowTemplateRow": 9, "columns": ["index", "name", "vendor", "func", "deploy", "unit_price", "qty", "total", "note"]}
       ]
     }
-  }
+  ]
 }
