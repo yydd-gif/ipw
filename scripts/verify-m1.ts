@@ -24,6 +24,11 @@ function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(`ASSERT: ${msg}`)
 }
 
+/** Word often splits CJK across adjacent w:t runs; join before fingerprinting. */
+function wtText(xml: string): string {
+  return [...xml.matchAll(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g)].map((m) => m[1]).join('')
+}
+
 async function main(): Promise<void> {
   if (!fs.existsSync(path.join(templatesDir, '2.12_项目周报.docx'))) {
     throw new Error('templates missing; run npm run generate:templates')
@@ -159,20 +164,23 @@ async function main(): Promise<void> {
   const weeklyBuf = fs.readFileSync(weekly.path)
   const weeklyZip = new PizZip(weeklyBuf)
   const weeklyXml = weeklyZip.file('word/document.xml')?.asText() ?? ''
-  assert(weeklyXml.includes('完成机柜就位') || weeklyXml.includes('核心交换机'), 'weekly docx aggregates log text')
-  assert(weeklyXml.includes('施工单位') || weeklyXml.includes('项目周报'), '2.12 retains week-report structure')
+  const weeklyText = wtText(weeklyXml)
+  assert(weeklyText.includes('完成机柜就位') || weeklyText.includes('核心交换机'), 'weekly docx aggregates log text')
+  assert(weeklyText.includes('施工单位') || weeklyText.includes('项目周报'), '2.12 retains week-report structure')
 
   const logDoc = studio.generateDocument(project.id, '2.10')
   assert(fs.existsSync(logDoc.path), '2.10 docx exists')
   assert((logDoc.paths?.length ?? 1) >= 3, '2.10 one log → one file')
   const logXml = new PizZip(fs.readFileSync(logDoc.path)).file('word/document.xml')?.asText() ?? ''
-  assert(logXml.includes('施工单位'), '2.10 retains 施工单位 header')
-  assert(logXml.includes('施工日志'), '2.10 retains 施工日志 header structure')
+  const logText = wtText(logXml)
+  assert(logText.includes('施工单位'), '2.10 retains 施工单位 header')
+  assert(logText.includes('施工日志'), '2.10 retains 施工日志 header structure')
+  assert(logText.includes('质量安全检查：'), '2.10 keeps 质量安全检查 label')
   assert(
-    logXml.includes('完成机柜就位') || logXml.includes('核心交换机') || logXml.includes('配线架'),
+    logText.includes('完成机柜就位') || logText.includes('核心交换机') || logText.includes('配线架'),
     '2.10 filled with a daily log'
   )
-  assert(logXml.includes('某集成公司'), '2.10 contractor filled')
+  assert(logText.includes('某集成公司'), '2.10 contractor filled')
 
   const optionalBatch = studio.confirmItemsWithArtifacts(project.id)
   const afterOptional = studio.checkExport(project.id)
@@ -203,11 +211,14 @@ async function main(): Promise<void> {
   const hwPath = path.join(tmp, 'projects', project.id, 'generated', '7.2_软硬件清单.docx')
   assert(fs.existsSync(hwPath), '7.2 docx generated')
   const hwXml = new PizZip(fs.readFileSync(hwPath)).file('word/document.xml')?.asText() ?? ''
+  const hwText = wtText(hwXml)
   const tmpl72 = new PizZip(fs.readFileSync(path.join(templatesDir, '7.2_软硬件清单.docx'))).file(
     'word/document.xml'
   )!.asText()
-  assert(hwXml.includes('硬件配置清单'), '7.2 real-template fingerprint 硬件配置清单')
-  assert(hwXml.includes('TODO 硬件名称'), '7.2 fills cloned hardware row')
+  assert(hwText.includes('硬件配置清单'), '7.2 real-template fingerprint 硬件配置清单')
+  assert(hwText.includes('TODO 硬件名称'), '7.2 fills cloned hardware row')
+  assert(hwText.includes('TODO 软件名称'), '7.2 fills cloned software row')
+  assert(!hwText.includes('XXX项目'), '7.2 replaces XXX on hardware and software titles')
   const totTmpl = (tmpl72.match(/总计/g) || []).length
   const totGen = (hwXml.match(/总计/g) || []).length
   assert(totGen === totTmpl, `7.2 must not clone 总计 rows (template=${totTmpl} generated=${totGen})`)
