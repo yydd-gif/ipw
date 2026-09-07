@@ -38,5 +38,24 @@ PY
 ls templates
 test -f templates/manifest.json
 test -f templates/7.2_软硬件清单.docx
+python3 - <<'PY'
+from pathlib import Path
+checks = {
+    "2.10_施工日志.docx": 9393,
+    "7.2_软硬件清单.docx": 12275,
+    "6.2_竣工验收报告.docx": 46865,
+}
+root = Path("templates")
+bad = []
+for name, expect in checks.items():
+    p = root / name
+    n = p.stat().st_size if p.exists() else 0
+    print(f"size {name}: {n} (expect ≈ {expect})")
+    if n < expect * 0.6:
+        bad.append(f"{name} still looks like a stub ({n} bytes)")
+if bad:
+    raise SystemExit("SIZE CHECK FAILED:\n" + "\n".join(bad))
+print("size checks ok")
+PY
 echo "core templates applied"
 node scripts/inspect-docx.mjs templates/7.2_软硬件清单.docx | head -80
