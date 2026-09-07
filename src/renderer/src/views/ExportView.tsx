@@ -10,7 +10,7 @@ export default function ExportView(props: {
   project: Project
   check: ExportCheck | null
   catalog: CatalogVolumeState[]
-  onRefresh: () => Promise<void> | void
+  onRefresh: () => Promise<ExportCheck | void> | void
   notify: (msg: string) => void
 }) {
   const check = props.check
@@ -47,9 +47,10 @@ export default function ExportView(props: {
           <button
             className="btn"
             onClick={async () => {
+              // 雷神: confirmReady (batch n, incl. optional) → refresh catalog+ExportCheck → toast.
+              // Header 「已确认」 stays required-only; toast never pretends n is that count.
               const n = await window.studio.confirmReady(props.project.id)
-              await props.onRefresh()
-              const latest = await window.studio.checkExport(props.project.id)
+              const latest = (await props.onRefresh()) ?? (await window.studio.checkExport(props.project.id))
               props.notify(formatConfirmReadyToast(n, latest))
             }}
           >
