@@ -116,14 +116,28 @@ async function main(): Promise<void> {
   assert(check.ok, `export should be allowed, blockers=${JSON.stringify(check.blockers)}`)
 
   const catalogState = studio.getCatalogState(project.id)
-  assert(
-    catalogState.some((v) => v.items.some((i) => i.item.code === '2.1')),
-    'engineering items enabled in hybrid'
+  const byCode = new Map(
+    catalogState.flatMap((v) => v.items).map((entry) => [entry.item.code, entry.item.title])
   )
+  assert(byCode.get('2.1') === '开工报审表', '2.1 is 开工报审表')
+  assert(
+    byCode.get('2.2') === '项目经理授权书及法定代表人授权书',
+    '2.2 is authorization letters'
+  )
+  assert(byCode.get('2.3') === '施工组织方案报审表', '2.3 is 施工组织方案报审表')
+  assert(byCode.get('2.4') === '施工组织方案', '2.4 is 施工组织方案')
+  assert(byCode.get('2.5') === '工程开工令', '2.5 is 工程开工令')
+  assert(byCode.get('2.11') === '项目月报', '2.11 is 项目月报')
+  assert(byCode.get('2.12') === '项目周报', '2.12 is 项目周报')
   assert(
     catalogState.some((v) => v.volume.id === '5' && v.items.some((i) => i.item.code === '5.1')),
     'gov-IT items enabled in hybrid'
   )
+
+  const dummy21 = path.join(tmp, 'dummy-2.1.txt')
+  fs.writeFileSync(dummy21, '占位 开工报审表\n')
+  studio.addUpload(project.id, '2.1', dummy21, '2.1_开工报审表.txt')
+  studio.setItemStatus(project.id, '2.1', 'confirmed')
 
   const zipPath = path.join(tmp, 'out.zip')
   const exported = studio.exportZip(project.id, zipPath)
@@ -134,7 +148,10 @@ async function main(): Promise<void> {
   const joined = names.join('\n')
   assert(names.some((n) => n.endsWith('00_目录与校验报告.md')), 'index markdown in zip')
   assert(joined.includes('2.12_项目周报'), 'weekly folder/file in zip')
+  assert(joined.includes('2.11_项目月报'), 'monthly folder/file in zip')
   assert(joined.includes('2.10_施工日志'), 'log folder in zip')
+  assert(joined.includes('2.1_开工报审表'), '2.1 zip folder uses 开工报审表')
+  assert(!joined.includes('检验批'), 'zip must not use 检验批 folder names')
   assert(joined.includes('1.2_合同'), 'contract folder in zip')
   assert(joined.includes('02_过程分册'), 'volume 2 folder')
   assert(joined.includes('07_竣工验收_政务信息化'), 'gov volume present for hybrid')
@@ -144,6 +161,9 @@ async function main(): Promise<void> {
   const indexText = zip.file(indexFile)!.asText()
   assert(indexText.includes('演示混合验收项目'), 'index contains project name')
   assert(indexText.includes('2.12'), 'index lists weekly report')
+  assert(indexText.includes('2.11 项目月报') || indexText.includes('| 2.11 |'), 'index lists monthly report')
+  assert(indexText.includes('开工报审表'), 'index lists 2.1 as 开工报审表')
+  assert(!indexText.includes('检验批'), 'index must not mention 检验批')
 
   console.log('M1 verify OK')
   console.log('dataDir', tmp)

@@ -40,13 +40,19 @@ export const CATALOG_ITEMS: CatalogItem[] = [
   { code: '1.4', title: '设计文件及批复', volumeId: '1', produceType: 'upload', required: false, appliesTo: ALL },
   { code: '1.5', title: '开工报告', volumeId: '1', produceType: 'upload', required: false, appliesTo: ALL },
 
-  // 2 过程分册
-  // engineering-only 2.1–2.5 optional; do NOT build 检验批/隐蔽/报验 form factories in M1
-  { code: '2.1', title: '检验批质量验收记录', volumeId: '2', produceType: 'upload', required: false, appliesTo: ENG },
-  { code: '2.2', title: '隐蔽工程验收记录', volumeId: '2', produceType: 'upload', required: false, appliesTo: ENG },
-  { code: '2.3', title: '分项工程质量验收记录', volumeId: '2', produceType: 'upload', required: false, appliesTo: ENG },
-  { code: '2.4', title: '分部工程质量验收记录', volumeId: '2', produceType: 'upload', required: false, appliesTo: ENG },
-  { code: '2.5', title: '单位工程质量验收记录', volumeId: '2', produceType: 'upload', required: false, appliesTo: ENG },
+  // 2 过程分册 — 2.1–2.5 为开工报审/授权/施工组织方案等上传件（工程/混合选填）
+  { code: '2.1', title: '开工报审表', volumeId: '2', produceType: 'upload', required: false, appliesTo: ENG },
+  {
+    code: '2.2',
+    title: '项目经理授权书及法定代表人授权书',
+    volumeId: '2',
+    produceType: 'upload',
+    required: false,
+    appliesTo: ENG
+  },
+  { code: '2.3', title: '施工组织方案报审表', volumeId: '2', produceType: 'upload', required: false, appliesTo: ENG },
+  { code: '2.4', title: '施工组织方案', volumeId: '2', produceType: 'upload', required: false, appliesTo: ENG },
+  { code: '2.5', title: '工程开工令', volumeId: '2', produceType: 'upload', required: false, appliesTo: ENG },
   { code: '2.6', title: '材料设备进场报验', volumeId: '2', produceType: 'upload', required: true, appliesTo: ALL },
   {
     code: '2.7',
