@@ -158,7 +158,9 @@ const APP = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 function saveDocx(filename, titleText, bodyInner) {
   fs.mkdirSync(OUT, { recursive: true })
   const dest = path.join(OUT, filename)
-  if (fs.existsSync(dest)) {
+  // Never clobber real user templates (postinstall / generate:templates).
+  // Set GENERATE_TEMPLATES_OVERWRITE=1 only for an explicit local rebuild.
+  if (fs.existsSync(dest) && process.env.GENERATE_TEMPLATES_OVERWRITE !== '1') {
     console.log('skip existing', filename)
     return false
   }

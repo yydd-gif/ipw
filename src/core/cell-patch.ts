@@ -18,6 +18,14 @@ import {
 const ELLIPSIS = '……'
 const TOTAL_LABEL = '总计'
 
+function isEllipsisText(text: string): boolean {
+  return text.includes(ELLIPSIS) || text.includes('…') || text.includes('．．．') || /\.{3,}/.test(text)
+}
+
+function isTotalRowText(text: string): boolean {
+  return text.includes(TOTAL_LABEL) && !isEllipsisText(text)
+}
+
 function fieldValue(data: Record<string, unknown>, field: string): unknown {
   if (field in data) return data[field]
   return undefined
@@ -115,7 +123,9 @@ function getTables(xml: string): XmlElement[] {
 }
 
 function getRows(tableFull: string): XmlElement[] {
-  return extractDirectChildren(asElement(tableFull, 'w:tbl'), 'w:tr')
+  const direct = extractDirectChildren(asElement(tableFull, 'w:tbl'), 'w:tr')
+  if (direct.length) return direct
+  return extractElements(tableFull, 'w:tr')
 }
 
 function getCells(rowFull: string): XmlElement[] {
@@ -162,13 +172,19 @@ function applyGroupedCellScalars(tableFull: string, specs: CellScalarSpec[], dat
 }
 
 function resolveTemplateRowIndex(rows: XmlElement[], requested: number): number {
+  const ellipsisAtOrAfter = (from: number): number =>
+    rows.findIndex((r, i) => i >= from && isEllipsisText(getText(r.full)))
+  const anyEllipsis = ellipsisAtOrAfter(0)
   const row = rows[requested]
-  if (!row) return requested
+  if (!row) return anyEllipsis
   const text = getText(row.full)
-  if (text.includes(TOTAL_LABEL) && !text.includes(ELLIPSIS)) {
-    const found = rows.findIndex((r, i) => i > requested && getText(r.full).includes(ELLIPSIS))
-    return found >= 0 ? found : -1
+  if (isTotalRowText(text)) {
+    const after = ellipsisAtOrAfter(requested + 1)
+    return after >= 0 ? after : anyEllipsis
   }
+  if (isEllipsisText(text)) return requested
+  const near = ellipsisAtOrAfter(requested)
+  if (near >= 0) return near
   return requested
 }
 
@@ -193,7 +209,7 @@ function cloneDataRows(tableFull: string, spec: TableFillSpec, data: Record<stri
   if (items.length === 0) return tableFull
 
   const tbl = asElement(tableFull, 'w:tbl')
-  const rows = extractDirectChildren(tbl, 'w:tr')
+  const rows = getRows(tableFull)
   const idx = resolveTemplateRowIndex(rows, spec.rowTemplateRow)
   if (idx < 0 || !rows[idx]) {
     console.warn(`CellPatch: skip clone for ${spec.id}, refusing 总计 row and no ${ELLIPSIS} row`)
@@ -220,8 +236,9 @@ function applyParagraphs(xml: string, specs: ParagraphSpec[], data: Record<strin
     if (spec.mode === 'replaceToken' || spec.fallbackScan) {
       const token = spec.token || '×××'
       const hasToken = target ? getText(target.full).includes(token) : false
-      if (!hasToken && spec.fallbackScan) {
-        target = paras.find((p) => getText(p.full).includes(token))
+      if (!hasToken) {
+        const inBody = paras.find((p) => getText(p.full).includes(token))
+        target = inBody ?? extractElements(out, 'w:p').find((p) => getText(p.full).includes(token)) ?? target
       }
     }
     if (!target) continue
