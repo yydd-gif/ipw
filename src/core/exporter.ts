@@ -2,8 +2,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import PizZip from 'pizzip'
 import { itemFolderName } from '../shared/catalog'
-import type { CatalogVolumeState, ExportCheck, Project } from '../shared/types'
-import { ensureDir, projectDir, zipRootName } from './paths'
+import type { CatalogItem, CatalogVolumeState, ExportCheck, Project } from '../shared/types'
+import { generatedDir, ensureDir, projectDir, sanitizeFilePart, zipRootName } from './paths'
 
 export function renderIndexMarkdown(
   project: Project,
@@ -63,11 +63,9 @@ export function packAcceptanceZip(args: {
     for (const entry of vol.items) {
       const folder = `${root}/${vol.volume.folder}/${itemFolderName(entry.item)}`
       let copied = 0
-      if (entry.instance.generated_path && fs.existsSync(entry.instance.generated_path)) {
-        zip.file(
-          `${folder}/${path.basename(entry.instance.generated_path)}`,
-          fs.readFileSync(entry.instance.generated_path)
-        )
+      const generated = generatedFilesForItem(args.dataDir, args.project.id, entry.item, entry.instance.generated_path)
+      for (const filePath of generated) {
+        zip.file(`${folder}/${path.basename(filePath)}`, fs.readFileSync(filePath))
         copied += 1
       }
       for (const upload of entry.uploads) {
@@ -90,4 +88,29 @@ export function packAcceptanceZip(args: {
   ensureDir(path.dirname(out))
   fs.writeFileSync(out, zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' }) as Buffer)
   return out
+}
+
+function generatedFilesForItem(
+  dataDir: string,
+  projectId: string,
+  item: CatalogItem,
+  generatedPath: string | null
+): string[] {
+  const dir = generatedDir(dataDir, projectId)
+  const prefix = sanitizeFilePart(`${item.code}_${item.title}`)
+  const seen = new Set<string>()
+  const files: string[] = []
+  const add = (filePath: string): void => {
+    const name = path.basename(filePath)
+    if (seen.has(name) || !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) return
+    seen.add(name)
+    files.push(filePath)
+  }
+  if (fs.existsSync(dir)) {
+    for (const name of fs.readdirSync(dir).sort()) {
+      if (name.startsWith(prefix)) add(path.join(dir, name))
+    }
+  }
+  if (generatedPath) add(generatedPath)
+  return files
 }

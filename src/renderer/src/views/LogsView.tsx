@@ -125,7 +125,7 @@ export default function LogsView(props: {
 
       <section className="card">
         <h3 className="sec">由日志生成报告</h3>
-        <p className="muted">演示路径：写入不少于 3 条施工日志 → 生成 2.12 项目周报 → 再生成 2.10 施工日志 Word。</p>
+        <p className="muted">演示路径：写入不少于 3 条施工日志 → 生成 2.12 项目周报 → 再生成 2.10 施工日志 Word（一日一表）。</p>
         <div className="grid-2">
           <label className="field">周期开始<input type="date" value={weekly.period_start} onChange={(e) => setWeekly({ ...weekly, period_start: e.target.value })} /></label>
           <label className="field">周期结束<input type="date" value={weekly.period_end} onChange={(e) => setWeekly({ ...weekly, period_end: e.target.value })} /></label>
@@ -166,8 +166,9 @@ export default function LogsView(props: {
             className="btn good"
             onClick={async () => {
               try {
-                await window.studio.generateDocument(props.project.id, '2.10')
-                props.notify('已生成 2.10 施工日志 Word')
+                const result = await window.studio.generateDocument(props.project.id, '2.10')
+                const n = result.paths?.length ?? 1
+                props.notify(n > 1 ? `已生成 ${n} 份 2.10 施工日志 Word（一日一表）` : '已生成 2.10 施工日志 Word')
                 await props.onRefresh()
               } catch (e) {
                 props.notify(e instanceof Error ? e.message : String(e))

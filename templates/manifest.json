@@ -1,0 +1,480 @@
+{
+  "version": 1,
+  "fillDefault": "cell",
+  "templates": [
+    {
+      "code": "2.10",
+      "file": "2.10_施工日志.docx",
+      "fillMode": "cell",
+      "paragraphs": [
+        {
+          "key": "project_name",
+          "paraIndex": 1,
+          "replacePattern": "×××工程"
+        },
+        {
+          "key": "doc_no",
+          "paraIndex": 2,
+          "replacePattern": "项目编号-A25-流水号"
+        }
+      ],
+      "scalars": [
+        {
+          "key": "contractor",
+          "table": 0,
+          "row": 0,
+          "col": 1
+        },
+        {
+          "key": "date",
+          "table": 0,
+          "row": 0,
+          "col": 3
+        },
+        {
+          "key": "weather",
+          "table": 0,
+          "row": 1,
+          "col": 1
+        },
+        {
+          "key": "location",
+          "table": 0,
+          "row": 2,
+          "col": 1
+        },
+        {
+          "key": "work_done",
+          "table": 0,
+          "row": 3,
+          "col": 0,
+          "mode": "appendAfterLabel",
+          "label": "今日完成工作："
+        },
+        {
+          "key": "qs_check",
+          "table": 0,
+          "row": 4,
+          "col": 0,
+          "mode": "afterLabel",
+          "label": "质量安全检查："
+        },
+        {
+          "key": "crew_count",
+          "table": 0,
+          "row": 5,
+          "col": 0,
+          "mode": "replaceToken",
+          "token": "个"
+        },
+        {
+          "key": "issues",
+          "table": 0,
+          "row": 5,
+          "col": 0,
+          "mode": "afterLabel",
+          "label": "现场问题："
+        },
+        {
+          "key": "coordination",
+          "table": 0,
+          "row": 5,
+          "col": 0,
+          "mode": "afterLabel",
+          "label": "需协调事项："
+        }
+      ],
+      "tables": []
+    },
+    {
+      "code": "2.12",
+      "file": "2.12_项目周报.docx",
+      "fillMode": "cell",
+      "paragraphs": [
+        {
+          "key": "project_name",
+          "paraIndex": 1,
+          "replacePattern": "×××工程"
+        },
+        {
+          "key": "doc_no",
+          "paraIndex": 2,
+          "replacePattern": "项目编号-A25-流水号"
+        }
+      ],
+      "scalars": [
+        {
+          "key": "contractor",
+          "table": 0,
+          "row": 0,
+          "col": 1
+        },
+        {
+          "key": "period_end",
+          "table": 0,
+          "row": 0,
+          "col": 3
+        },
+        {
+          "key": "phase",
+          "table": 0,
+          "row": 1,
+          "col": 1
+        },
+        {
+          "key": "done",
+          "table": 0,
+          "row": 2,
+          "col": 1
+        },
+        {
+          "key": "undone",
+          "table": 0,
+          "row": 3,
+          "col": 1
+        },
+        {
+          "key": "issues",
+          "table": 0,
+          "row": 4,
+          "col": 1
+        },
+        {
+          "key": "plan",
+          "table": 0,
+          "row": 5,
+          "col": 1
+        }
+      ],
+      "tables": []
+    },
+    {
+      "code": "2.11",
+      "file": "2.11_项目月报.docx",
+      "fillMode": "cell",
+      "paragraphs": [
+        {
+          "key": "project_name",
+          "paraIndex": 1,
+          "replacePattern": "×××工程"
+        },
+        {
+          "key": "doc_no",
+          "paraIndex": 2,
+          "replacePattern": "项目编号-A26-流水号"
+        }
+      ],
+      "scalars": [
+        {
+          "key": "contractor",
+          "table": 0,
+          "row": 0,
+          "col": 1
+        },
+        {
+          "key": "period_end",
+          "table": 0,
+          "row": 0,
+          "col": 3
+        },
+        {
+          "key": "phase",
+          "table": 0,
+          "row": 1,
+          "col": 1
+        },
+        {
+          "key": "done",
+          "table": 0,
+          "row": 2,
+          "col": 1
+        },
+        {
+          "key": "undone",
+          "table": 0,
+          "row": 3,
+          "col": 1
+        },
+        {
+          "key": "issues",
+          "table": 0,
+          "row": 4,
+          "col": 1
+        },
+        {
+          "key": "plan",
+          "table": 0,
+          "row": 5,
+          "col": 1
+        }
+      ],
+      "tables": []
+    },
+    {
+      "code": "2.7",
+      "file": "2.7_设备开箱检验记录.docx",
+      "fillMode": "cell",
+      "paragraphs": [
+        {
+          "key": "project_name",
+          "paraIndex": 1,
+          "replacePattern": "×××工程"
+        },
+        {
+          "key": "doc_no",
+          "paraIndex": 2,
+          "replacePattern": "项目编号-A12-流水号"
+        }
+      ],
+      "scalars": [
+        {
+          "key": "owner",
+          "table": 0,
+          "row": 0,
+          "col": 1
+        },
+        {
+          "key": "supervisor",
+          "table": 0,
+          "row": 0,
+          "col": 3
+        },
+        {
+          "key": "contractor",
+          "table": 0,
+          "row": 1,
+          "col": 1
+        },
+        {
+          "key": "location",
+          "table": 0,
+          "row": 1,
+          "col": 3
+        },
+        {
+          "key": "serial",
+          "table": 0,
+          "row": 2,
+          "col": 1
+        },
+        {
+          "key": "device_name",
+          "table": 0,
+          "row": 2,
+          "col": 3
+        }
+      ],
+      "tables": []
+    },
+    {
+      "code": "2.8",
+      "file": "2.8_设备安装记录.docx",
+      "fillMode": "cell",
+      "paragraphs": [
+        {
+          "key": "project_name",
+          "paraIndex": 1,
+          "replacePattern": "×××工程"
+        },
+        {
+          "key": "doc_no",
+          "paraIndex": 2,
+          "replacePattern": "项目编号-A13-流水号"
+        }
+      ],
+      "scalars": [
+        {
+          "key": "location",
+          "table": 0,
+          "row": 0,
+          "col": 1
+        },
+        {
+          "key": "date",
+          "table": 0,
+          "row": 0,
+          "col": 3
+        },
+        {
+          "key": "installer",
+          "table": 0,
+          "row": 1,
+          "col": 1
+        },
+        {
+          "key": "supervisor_person",
+          "table": 0,
+          "row": 1,
+          "col": 3
+        }
+      ],
+      "tables": [
+        {
+          "id": "rows",
+          "tableIndex": 0,
+          "headerRow": 2,
+          "rowTemplateRow": 3,
+          "columns": [
+            "device_name",
+            "parts",
+            "location",
+            "process",
+            "power",
+            "record"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "6.2",
+      "file": "6.2_竣工验收报告.docx",
+      "fillMode": "cell",
+      "paragraphs": [],
+      "scalars": [
+        {
+          "key": "owner",
+          "table": 0,
+          "row": 1,
+          "col": 1
+        },
+        {
+          "key": "supervisor",
+          "table": 0,
+          "row": 2,
+          "col": 1
+        },
+        {
+          "key": "contractor",
+          "table": 0,
+          "row": 3,
+          "col": 1
+        },
+        {
+          "key": "project_name",
+          "table": 2,
+          "row": 0,
+          "col": 1
+        },
+        {
+          "key": "contract_no",
+          "table": 2,
+          "row": 1,
+          "col": 1
+        },
+        {
+          "key": "owner",
+          "table": 2,
+          "row": 2,
+          "col": 1
+        },
+        {
+          "key": "supervisor",
+          "table": 2,
+          "row": 3,
+          "col": 1
+        },
+        {
+          "key": "contractor",
+          "table": 2,
+          "row": 4,
+          "col": 1
+        }
+      ],
+      "tables": []
+    },
+    {
+      "code": "7.1",
+      "file": "7.1_项目建设总结.docx",
+      "fillMode": "cell",
+      "paragraphs": [
+        {
+          "key": "project_name",
+          "paraIndex": 3,
+          "replacePattern": "XXX"
+        }
+      ],
+      "scalars": [],
+      "tables": [],
+      "notes": "Mostly free-form paragraphs; layout risk — may need manual review"
+    },
+    {
+      "code": "7.2",
+      "file": "7.2_软硬件清单.docx",
+      "fillMode": "cell",
+      "paragraphs": [
+        {
+          "key": "project_name",
+          "paraIndex": 1,
+          "replacePattern": "XXX"
+        },
+        {
+          "key": "project_name",
+          "paraIndex": 2,
+          "replacePattern": "XXX"
+        }
+      ],
+      "scalars": [
+        {
+          "key": "project_name",
+          "table": 0,
+          "row": 1,
+          "col": 1
+        },
+        {
+          "key": "approval_no",
+          "table": 0,
+          "row": 1,
+          "col": 3
+        },
+        {
+          "key": "project_name",
+          "table": 1,
+          "row": 1,
+          "col": 1
+        },
+        {
+          "key": "approval_no",
+          "table": 1,
+          "row": 1,
+          "col": 3
+        }
+      ],
+      "tables": [
+        {
+          "id": "hardware",
+          "tableIndex": 0,
+          "headerRow": 2,
+          "rowTemplateRow": 6,
+          "columns": [
+            "index",
+            "name",
+            "spec",
+            "brand",
+            "deploy",
+            "unit_price",
+            "qty",
+            "total",
+            "note"
+          ]
+        },
+        {
+          "id": "software",
+          "tableIndex": 1,
+          "headerRow": 2,
+          "rowTemplateRow": 9,
+          "columns": [
+            "index",
+            "name",
+            "vendor",
+            "func",
+            "deploy",
+            "unit_price",
+            "qty",
+            "total",
+            "note"
+          ]
+        }
+      ]
+    }
+  ]
+}

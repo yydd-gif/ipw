@@ -3,10 +3,65 @@ import path from 'node:path'
 import PizZip from 'pizzip'
 import Docxtemplater from 'docxtemplater'
 import type { CatalogItem, DailyLog, Project, WeeklyReportOptions } from '../shared/types'
+import { fillDocxCellPatch } from './cell-patch'
 import { aggregateLogs, logsToTemplateRows } from './logs'
+import { loadTemplatesManifest, manifestEntryFor } from './template-manifest'
 
 export function mark(checked: unknown): string {
   return checked === true || checked === 'true' || checked === '☑' || checked === '是' ? '☑' : '☐'
+}
+
+function asRecord(row: unknown): Record<string, unknown> {
+  return row && typeof row === 'object' ? (row as Record<string, unknown>) : {}
+}
+
+function pickStr(row: Record<string, unknown>, ...keys: string[]): string {
+  for (const key of keys) {
+    const v = row[key]
+    if (v !== undefined && v !== null && String(v) !== '') return String(v)
+  }
+  return ''
+}
+
+function computedTotal(row: Record<string, unknown>): string {
+  const existing = pickStr(row, 'total')
+  if (existing) return existing
+  const price = Number(pickStr(row, 'unit_price'))
+  const qty = Number(pickStr(row, 'qty'))
+  if (!Number.isNaN(price) && !Number.isNaN(qty) && pickStr(row, 'unit_price') && pickStr(row, 'qty')) {
+    return String(price * qty)
+  }
+  return ''
+}
+
+export function mapHardwareRow(row: unknown, index: number): Record<string, string> {
+  const r = asRecord(row)
+  return {
+    index: pickStr(r, 'index') || String(index + 1),
+    name: pickStr(r, 'name'),
+    spec: pickStr(r, 'spec'),
+    brand: pickStr(r, 'brand'),
+    deploy: pickStr(r, 'deploy', 'location'),
+    unit_price: pickStr(r, 'unit_price'),
+    qty: pickStr(r, 'qty'),
+    total: computedTotal(r),
+    note: pickStr(r, 'note', 'remark')
+  }
+}
+
+export function mapSoftwareRow(row: unknown, index: number): Record<string, string> {
+  const r = asRecord(row)
+  return {
+    index: pickStr(r, 'index') || String(index + 1),
+    name: pickStr(r, 'name'),
+    vendor: pickStr(r, 'vendor', 'version'),
+    func: pickStr(r, 'func', 'license'),
+    deploy: pickStr(r, 'deploy'),
+    unit_price: pickStr(r, 'unit_price'),
+    qty: pickStr(r, 'qty'),
+    total: computedTotal(r),
+    note: pickStr(r, 'note', 'remark')
+  }
 }
 
 export function commonFields(project: Project): Record<string, string> {
@@ -46,9 +101,32 @@ export function fillDocxTemplate(
   return doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' }) as Buffer
 }
 
-export function writeFilledDocx(templatePath: string, outputPath: string, data: Record<string, unknown>): string {
+export function fillDocx(
+  templatePath: string,
+  data: Record<string, unknown>,
+  options?: { code?: string; templatesDir?: string }
+): Buffer {
+  const templatesDir = options?.templatesDir ?? path.dirname(templatePath)
+  const manifest = loadTemplatesManifest(templatesDir)
+  const entry = manifestEntryFor(manifest, {
+    code: options?.code,
+    fileName: path.basename(templatePath)
+  })
+  const mode = entry?.fillMode ?? manifest.fillDefault ?? (entry ? 'cell' : 'placeholder')
+  if (mode === 'cell' && entry) {
+    return fillDocxCellPatch(templatePath, data, entry)
+  }
+  return fillDocxTemplate(templatePath, data)
+}
+
+export function writeFilledDocx(
+  templatePath: string,
+  outputPath: string,
+  data: Record<string, unknown>,
+  options?: { code?: string; templatesDir?: string }
+): string {
   fs.mkdirSync(path.dirname(outputPath), { recursive: true })
-  const buf = fillDocxTemplate(templatePath, data)
+  const buf = fillDocx(templatePath, data, options)
   fs.writeFileSync(outputPath, buf)
   return outputPath
 }
@@ -71,8 +149,19 @@ export function buildTemplateData(
 
   if (item.code === '2.10') {
     const logs = extra?.logs ?? []
+    const one = logs[0]
+    const row = one ? logsToTemplateRows([one])[0]! : {}
     return {
       ...base,
+      ...row,
+      date: row.date || payload.date || '',
+      weather: row.weather || payload.weather || '',
+      location: row.location || payload.location || '',
+      work_done: row.work_done || payload.work_done || '',
+      qs_check: row.qs_check || payload.qs_check || '',
+      crew_count: row.crew_count || payload.crew_count || '',
+      issues: row.issues || payload.issues || '',
+      coordination: row.coordination || payload.coordination || '',
       logs: logsToTemplateRows(logs),
       log_count: String(logs.length)
     }
@@ -99,6 +188,7 @@ export function buildTemplateData(
       location: payload.location || project.phase || '',
       serial: payload.serial || '',
       device_name: payload.device_name || '',
+      date: payload.date || '',
       packaging_ok: mark(payload.packaging_ok ?? true),
       appearance_ok: mark(payload.appearance_ok ?? true),
       accessories_ok: mark(payload.accessories_ok ?? true),
@@ -109,18 +199,38 @@ export function buildTemplateData(
   }
 
   if (item.code === '2.8') {
-    const rows = Array.isArray(payload.rows) && payload.rows.length > 0
-      ? payload.rows
-      : [
-          {
-            device_name: 'TODO 设备名称',
-            location: payload.location || '',
-            installer: payload.installer || '',
-            date: payload.date || '',
-            result: '合格'
-          }
-        ]
-    return { ...base, rows }
+    const rawRows =
+      Array.isArray(payload.rows) && payload.rows.length > 0
+        ? (payload.rows as Record<string, unknown>[])
+        : [
+            {
+              device_name: 'TODO 设备名称',
+              location: payload.location || '',
+              installer: payload.installer || '',
+              date: payload.date || '',
+              result: '合格'
+            }
+          ]
+    const first = asRecord(rawRows[0])
+    const rows = rawRows.map((row) => {
+      const r = asRecord(row)
+      return {
+        device_name: pickStr(r, 'device_name'),
+        parts: pickStr(r, 'parts'),
+        location: pickStr(r, 'location'),
+        process: pickStr(r, 'process', 'result'),
+        power: pickStr(r, 'power'),
+        record: pickStr(r, 'record', 'installer')
+      }
+    })
+    return {
+      ...base,
+      location: pickStr(asRecord(payload), 'location') || pickStr(first, 'location') || '',
+      date: pickStr(asRecord(payload), 'date') || pickStr(first, 'date') || '',
+      installer: pickStr(asRecord(payload), 'installer') || pickStr(first, 'installer') || '',
+      supervisor_person: pickStr(asRecord(payload), 'supervisor_person') || project.supervisor || '',
+      rows
+    }
   }
 
   if (item.code === '6.2') {
@@ -146,13 +256,20 @@ export function buildTemplateData(
   }
 
   if (item.code === '7.2') {
-    const hardware = Array.isArray(payload.hardware) && payload.hardware.length > 0
-      ? payload.hardware
-      : [{ name: 'TODO 硬件名称', spec: '', qty: '1', unit: '台', remark: '' }]
-    const software = Array.isArray(payload.software) && payload.software.length > 0
-      ? payload.software
-      : [{ name: 'TODO 软件名称', version: '', license: '', qty: '1', remark: '' }]
-    return { ...base, hardware, software }
+    const hardwareRaw =
+      Array.isArray(payload.hardware) && payload.hardware.length > 0
+        ? (payload.hardware as Record<string, unknown>[])
+        : [{ name: 'TODO 硬件名称', spec: '', qty: '1', unit: '台', remark: '' }]
+    const softwareRaw =
+      Array.isArray(payload.software) && payload.software.length > 0
+        ? (payload.software as Record<string, unknown>[])
+        : [{ name: 'TODO 软件名称', version: '', license: '', qty: '1', remark: '' }]
+    return {
+      ...base,
+      approval_no: String(payload.approval_no || project.doc_no || ''),
+      hardware: hardwareRaw.map((row, i) => mapHardwareRow(row, i)),
+      software: softwareRaw.map((row, i) => mapSoftwareRow(row, i))
+    }
   }
 
   return base
