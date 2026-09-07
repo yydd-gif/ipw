@@ -56,8 +56,7 @@
           "table": 0,
           "row": 4,
           "col": 0,
-          "mode": "afterLabel",
-          "label": "质量安全检查："
+          "mode": "replace"
         },
         {
           "key": "crew_count",
@@ -389,8 +388,8 @@
       "paragraphs": [
         {
           "key": "project_name",
-          "paraIndex": 3,
-          "replacePattern": "XXX"
+          "paraIndex": 1,
+          "replacePattern": "XXX项目情况简介"
         }
       ],
       "scalars": [],
@@ -405,11 +404,6 @@
         {
           "key": "project_name",
           "paraIndex": 1,
-          "replacePattern": "XXX"
-        },
-        {
-          "key": "project_name",
-          "paraIndex": 2,
           "replacePattern": "XXX"
         }
       ],
