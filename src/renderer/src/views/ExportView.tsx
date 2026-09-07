@@ -1,3 +1,4 @@
+import { canOpenExportSaveDialog, exportBlockedMessage } from '@shared/completeness'
 import type { CatalogVolumeState, ExportCheck, Project } from '@shared/types'
 import { StatusBadge } from '../components/StatusBadge'
 
@@ -43,8 +44,8 @@ export default function ExportView(props: {
             className="btn"
             onClick={async () => {
               const n = await window.studio.confirmReady(props.project.id)
-              props.notify(`已确认 ${n} 条已有资料的条目`)
               await props.onRefresh()
+              props.notify(`已确认 ${n} 条已有资料的条目`)
             }}
           >
             确认所有已有资料
@@ -53,6 +54,12 @@ export default function ExportView(props: {
             className="btn primary"
             onClick={async () => {
               try {
+                const latest = await window.studio.checkExport(props.project.id)
+                if (!canOpenExportSaveDialog(latest)) {
+                  props.notify(exportBlockedMessage(latest))
+                  await props.onRefresh()
+                  return
+                }
                 const result = await window.studio.exportZip(props.project.id)
                 if (result) props.notify(`已导出：${result.path}`)
                 await props.onRefresh()

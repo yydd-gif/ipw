@@ -1,6 +1,33 @@
 import type { CatalogItemState, ExportBlocker, ExportCheck, ItemStatus, ProjectType } from './types'
 import { isRequiredComplete, itemsForProjectType } from './catalog'
 
+/** Native save dialog may open only after completeness has already passed. */
+export function canOpenExportSaveDialog(check: ExportCheck): boolean {
+  return check.ok
+}
+
+export function exportBlockedMessage(check: ExportCheck): string {
+  const detail = check.blockers.map((b) => `${b.code} ${b.title}（${b.reason}）`).join('；')
+  return `无法导出：仍有必填条目未完成。${detail}`
+}
+
+/**
+ * Gate export behind completeness: `pickSavePath` (the save dialog) is not
+ * called unless the package is allowed to export.
+ */
+export async function withExportSavePath<T>(
+  check: ExportCheck,
+  pickSavePath: () => Promise<string | null | undefined>,
+  exportTo: (destPath: string) => T | Promise<T>
+): Promise<T | null> {
+  if (!canOpenExportSaveDialog(check)) {
+    throw new Error(exportBlockedMessage(check))
+  }
+  const dest = await pickSavePath()
+  if (!dest) return null
+  return exportTo(dest)
+}
+
 export function buildExportCheck(
   projectType: ProjectType,
   states: CatalogItemState[]

@@ -8,7 +8,7 @@ import {
   itemsForProjectType,
   volumeApplies
 } from '../shared/catalog'
-import { buildExportCheck } from '../shared/completeness'
+import { buildExportCheck, exportBlockedMessage } from '../shared/completeness'
 import { packAcceptanceZip } from './exporter'
 import { filterLogsByPeriod } from './logs'
 import type {
@@ -466,17 +466,16 @@ export class Studio {
 
   confirmItemsWithArtifacts(projectId: string): number {
     const state = this.getCatalogState(projectId)
-    let n = 0
     for (const vol of state) {
       for (const item of vol.items) {
         const hasFile = Boolean(item.instance.generated_path) || item.uploads.length > 0
         if (hasFile && item.instance.status !== 'confirmed' && item.instance.status !== 'waived') {
           this.setItemStatus(projectId, item.item.code, 'confirmed')
-          n += 1
         }
       }
     }
-    return n
+    // Same source of truth as the 出包 page “已确认” count (required + confirmed).
+    return this.checkExport(projectId).confirmed
   }
 
   checkExport(projectId: string): ExportCheck {
@@ -489,8 +488,7 @@ export class Studio {
     const project = this.getProject(projectId)
     const check = this.checkExport(projectId)
     if (!check.ok) {
-      const detail = check.blockers.map((b) => `${b.code} ${b.title}（${b.reason}）`).join('；')
-      throw new Error(`无法导出：仍有必填条目未完成。${detail}`)
+      throw new Error(exportBlockedMessage(check))
     }
 
     const out = packAcceptanceZip({

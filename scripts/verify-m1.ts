@@ -9,6 +9,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import PizZip from 'pizzip'
 import { itemsForProjectType } from '../src/shared/catalog'
+import { canOpenExportSaveDialog, withExportSavePath } from '../src/shared/completeness'
 import { Studio } from '../src/core/studio'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -76,13 +77,37 @@ async function main(): Promise<void> {
   }
   assert(studio.listLogs(project.id).length >= 3, 'need ≥3 daily logs')
 
+  const earlyCheck = studio.checkExport(project.id)
+  assert(!earlyCheck.ok, 'export check fails while required items are incomplete')
+  assert(
+    !canOpenExportSaveDialog(earlyCheck),
+    'save dialog must stay closed while required items are incomplete'
+  )
+
+  let saveDialogOpened = false
+  let blockedBeforeDialog = false
+  try {
+    await withExportSavePath(
+      earlyCheck,
+      async () => {
+        saveDialogOpened = true
+        return path.join(tmp, 'too-early.zip')
+      },
+      (dest) => studio.exportZip(project.id, dest)
+    )
+  } catch {
+    blockedBeforeDialog = true
+  }
+  assert(blockedBeforeDialog, 'export must block while required items are incomplete')
+  assert(!saveDialogOpened, 'save dialog must not open before completeness passes')
+
   let blocked = false
   try {
     studio.exportZip(project.id, path.join(tmp, 'too-early.zip'))
   } catch {
     blocked = true
   }
-  assert(blocked, 'export must block while required items are incomplete')
+  assert(blocked, 'exportZip must still throw while required items are incomplete')
 
   const weekly = studio.generateWeeklyReport(project.id, {
     period_start: '2026-09-01',
@@ -113,7 +138,22 @@ async function main(): Promise<void> {
   const confirmed = studio.confirmItemsWithArtifacts(project.id)
   assert(confirmed > 0, 'confirmed some items')
   const check = studio.checkExport(project.id)
+  assert(confirmed === check.confirmed, 'toast/confirm count must match on-page required confirmed count')
   assert(check.ok, `export should be allowed, blockers=${JSON.stringify(check.blockers)}`)
+  assert(canOpenExportSaveDialog(check), 'save dialog may open only after completeness passes')
+
+  const confirmedIncludingOptional = studio
+    .getCatalogState(project.id)
+    .flatMap((v) => v.items)
+    .filter((entry) => entry.instance.status === 'confirmed').length
+  assert(
+    confirmedIncludingOptional >= check.confirmed,
+    'optional confirmed items must not inflate the displayed required count'
+  )
+  assert(
+    confirmed !== confirmedIncludingOptional,
+    'optional artifacts (e.g. 2.10/2.11/2.12) must not be mixed into the toast/page confirmed count'
+  )
 
   const catalogState = studio.getCatalogState(project.id)
   const byCode = new Map(
@@ -140,8 +180,17 @@ async function main(): Promise<void> {
   studio.setItemStatus(project.id, '2.1', 'confirmed')
 
   const zipPath = path.join(tmp, 'out.zip')
-  const exported = studio.exportZip(project.id, zipPath)
-  assert(fs.existsSync(exported.path), 'zip exists')
+  let allowedDialogOpened = false
+  const exported = await withExportSavePath(
+    studio.checkExport(project.id),
+    async () => {
+      allowedDialogOpened = true
+      return zipPath
+    },
+    (dest) => studio.exportZip(project.id, dest)
+  )
+  assert(allowedDialogOpened, 'save dialog opens when export is allowed')
+  assert(exported && fs.existsSync(exported.path), 'zip exists')
 
   const zip = new PizZip(fs.readFileSync(zipPath))
   const names = Object.keys(zip.files)
