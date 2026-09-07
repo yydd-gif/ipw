@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { DailyLog, Project } from '@shared/types'
 
 function today(): string {
@@ -26,10 +26,23 @@ export default function LogsView(props: {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [weekly, setWeekly] = useState({
     period_start: props.logs[0]?.date || today(),
-    period_end: today(),
+    period_end: props.logs[props.logs.length - 1]?.date || today(),
     undone: '',
     plan: '下周继续按计划施工并整理验收资料。'
   })
+
+  useEffect(() => {
+    if (!props.logs.length) return
+    const start = props.logs[0]!.date
+    const end = props.logs[props.logs.length - 1]!.date
+    setWeekly((w) => {
+      if (w.period_start <= start && w.period_end >= end) return w
+      if (w.undone || (w.plan && w.plan !== '下周继续按计划施工并整理验收资料。')) {
+        return { ...w, period_start: start < w.period_start ? start : w.period_start, period_end: end > w.period_end ? end : w.period_end }
+      }
+      return { ...w, period_start: start, period_end: end }
+    })
+  }, [props.logs])
 
   const set = (patch: Partial<typeof form>) => setForm({ ...form, ...patch })
 
