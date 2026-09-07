@@ -1,0 +1,38 @@
+{
+  "name": "acceptance-studio",
+  "productName": "验收到手",
+  "version": "0.1.0",
+  "description": "验收到手（Acceptance Studio）M1：工程/政务信息化项目验收资料组卷桌面应用",
+  "main": "./out/main/index.js",
+  "author": "验收到手",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "generate:templates": "node scripts/generate-templates.mjs",
+    "verify:m1": "tsx scripts/verify-m1.ts",
+    "test": "npm run verify:m1",
+    "postinstall": "node scripts/generate-templates.mjs",
+    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit"
+  },
+  "dependencies": {
+    "docxtemplater": "^3.61.1",
+    "pizzip": "^3.1.8",
+    "sql.js": "^1.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@types/sql.js": "^1.4.9",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.3.1",
+    "electron-vite": "^2.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.14"
+  }
+}

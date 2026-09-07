@@ -1,0 +1,157 @@
+/**
+ * Headless M1 acceptance path:
+ * hybrid project → ≥3 daily logs → 2.12 weekly docx → 2.10 log docx
+ * → dummy uploads for remaining required items → zip export.
+ */
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import PizZip from 'pizzip'
+import { itemsForProjectType } from '../src/shared/catalog'
+import { Studio } from '../src/core/studio'
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'acceptance-studio-m1-'))
+const templatesDir = path.join(root, 'templates')
+
+function assert(cond: unknown, msg: string): asserts cond {
+  if (!cond) throw new Error(`ASSERT: ${msg}`)
+}
+
+async function main(): Promise<void> {
+  if (!fs.existsSync(path.join(templatesDir, '2.12_项目周报.docx'))) {
+    throw new Error('templates missing; run npm run generate:templates')
+  }
+
+  const studio = new Studio({ dataDir: tmp, templatesDir })
+  await studio.init()
+
+  const project = studio.createProject({
+    name: '演示混合验收项目',
+    type: 'hybrid',
+    owner: '某市大数据局',
+    supervisor: '某监理公司',
+    contractor: '某集成公司',
+    contract_no: 'HT-2026-001',
+    phase: '施工',
+    doc_no: 'YS-001'
+  })
+
+  const logs = [
+    {
+      date: '2026-09-01',
+      weather: '晴',
+      location: '主机房',
+      work_done: '完成机柜就位与接地检查。',
+      qs_check: '接地电阻合格。',
+      crew_count: 8,
+      issues: '桥架到货延迟半天。',
+      coordination: '与业主确认机柜编号。'
+    },
+    {
+      date: '2026-09-02',
+      weather: '多云',
+      location: '主机房',
+      work_done: '完成核心交换机上架及线缆敷设。',
+      qs_check: '标签与图纸一致。',
+      crew_count: 10,
+      issues: '',
+      coordination: '监理旁站。'
+    },
+    {
+      date: '2026-09-03',
+      weather: '阴',
+      location: '配线间',
+      work_done: '完成配线架打线和通断测试。',
+      qs_check: '抽测 20 点全部通过。',
+      crew_count: 6,
+      issues: '两根尾纤需更换。',
+      coordination: '通知供货商更换。'
+    }
+  ]
+
+  for (const log of logs) {
+    studio.saveLog({ ...log, project_id: project.id })
+  }
+  assert(studio.listLogs(project.id).length >= 3, 'need ≥3 daily logs')
+
+  let blocked = false
+  try {
+    studio.exportZip(project.id, path.join(tmp, 'too-early.zip'))
+  } catch {
+    blocked = true
+  }
+  assert(blocked, 'export must block while required items are incomplete')
+
+  const weekly = studio.generateWeeklyReport(project.id, {
+    period_start: '2026-09-01',
+    period_end: '2026-09-03',
+    undone: '机房精密空调调试未完成。',
+    plan: '下周完成空调调试并开始试运行准备。'
+  })
+  const weeklyBuf = fs.readFileSync(weekly.path)
+  const weeklyZip = new PizZip(weeklyBuf)
+  const weeklyXml = weeklyZip.file('word/document.xml')?.asText() ?? ''
+  assert(weeklyXml.includes('完成机柜就位') || weeklyXml.includes('核心交换机'), 'weekly docx aggregates log text')
+
+  const logDoc = studio.generateDocument(project.id, '2.10')
+  assert(fs.existsSync(logDoc.path), '2.10 docx exists')
+
+  for (const item of itemsForProjectType('hybrid')) {
+    if (item.produceType === 'template' || item.produceType === 'derived') {
+      if (item.code === '2.10' || item.code === '2.12') continue
+      studio.generateDocument(project.id, item.code)
+    }
+    if (item.required && item.produceType === 'upload') {
+      const dummy = path.join(tmp, `dummy-${item.code}.txt`)
+      fs.writeFileSync(dummy, `占位资料 ${item.code} ${item.title}\n`)
+      studio.addUpload(project.id, item.code, dummy, `${item.code}_${item.title}.txt`)
+    }
+  }
+
+  const confirmed = studio.confirmItemsWithArtifacts(project.id)
+  assert(confirmed > 0, 'confirmed some items')
+  const check = studio.checkExport(project.id)
+  assert(check.ok, `export should be allowed, blockers=${JSON.stringify(check.blockers)}`)
+
+  const catalogState = studio.getCatalogState(project.id)
+  assert(
+    catalogState.some((v) => v.items.some((i) => i.item.code === '2.1')),
+    'engineering items enabled in hybrid'
+  )
+  assert(
+    catalogState.some((v) => v.volume.id === '5' && v.items.some((i) => i.item.code === '5.1')),
+    'gov-IT items enabled in hybrid'
+  )
+
+  const zipPath = path.join(tmp, 'out.zip')
+  const exported = studio.exportZip(project.id, zipPath)
+  assert(fs.existsSync(exported.path), 'zip exists')
+
+  const zip = new PizZip(fs.readFileSync(zipPath))
+  const names = Object.keys(zip.files)
+  const joined = names.join('\n')
+  assert(names.some((n) => n.endsWith('00_目录与校验报告.md')), 'index markdown in zip')
+  assert(joined.includes('2.12_项目周报'), 'weekly folder/file in zip')
+  assert(joined.includes('2.10_施工日志'), 'log folder in zip')
+  assert(joined.includes('1.2_合同'), 'contract folder in zip')
+  assert(joined.includes('02_过程分册'), 'volume 2 folder')
+  assert(joined.includes('07_竣工验收_政务信息化'), 'gov volume present for hybrid')
+  assert(joined.includes('2.7_设备开箱'), 'template item folder uses catalog code')
+
+  const indexFile = names.find((n) => n.endsWith('00_目录与校验报告.md'))!
+  const indexText = zip.file(indexFile)!.asText()
+  assert(indexText.includes('演示混合验收项目'), 'index contains project name')
+  assert(indexText.includes('2.12'), 'index lists weekly report')
+
+  console.log('M1 verify OK')
+  console.log('dataDir', tmp)
+  console.log('zip entries', names.length)
+  console.log(names.slice(0, 12).join('\n'))
+}
+
+main().catch((err) => {
+  console.error(err)
+  process.exit(1)
+})
