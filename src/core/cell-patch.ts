@@ -93,15 +93,28 @@ function asElement(full: string, name: string): XmlElement {
   return el
 }
 
+function patchParagraphRuns(pFull: string, newText: string): string {
+  const runs = extractElements(pFull, 'w:t')
+  if (!runs.length) return pFull
+  let xml = pFull
+  for (let i = runs.length - 1; i >= 0; i--) {
+    const wt = runs[i]!
+    const inner = i === 0 ? escapeXml(newText) : ''
+    const gt = wt.full.indexOf('>')
+    if (gt < 0) continue
+    let open = wt.full.slice(0, gt)
+    if ((inner.startsWith(' ') || inner.endsWith(' ') || inner === '') && !open.includes('xml:space')) {
+      open += ' xml:space="preserve"'
+    }
+    xml = replaceSlice(xml, wt.start, wt.end, `${open}>${inner}</w:t>`)
+  }
+  return xml
+}
+
 function writeRuns(containerFull: string, containerName: 'w:tc' | 'w:p', text: string): string {
+  if (containerName === 'w:p') return patchParagraphRuns(containerFull, text.split(/\r?\n/).join(''))
   const el = asElement(containerFull, containerName)
   const lines = text.split(/\r?\n/)
-  if (containerName === 'w:p') {
-    const pPr = firstChild(el, 'w:pPr')?.full ?? ''
-    const firstR = firstChild(el, 'w:r')
-    const rPr = firstR ? (firstChild(firstR, 'w:rPr')?.full ?? '') : ''
-    return `${containerFull.slice(el.start, el.openEnd)}${pPr}${runXml(lines[0] ?? '', rPr)}</w:p>`
-  }
   const tcPr = firstChild(el, 'w:tcPr')?.full ?? ''
   const firstP = firstChild(el, 'w:p')
   const pPr = firstP ? (firstChild(firstP, 'w:pPr')?.full ?? '') : ''
@@ -211,17 +224,48 @@ function cloneDataRows(tableFull: string, spec: TableFillSpec, data: Record<stri
   if (items.length === 0) return tableFull
 
   const rows = getRows(tableFull)
-  const idx = resolveTemplateRowIndex(rows, spec.rowTemplateRow)
-  if (idx < 0 || !rows[idx]) {
+  const templateIdx = resolveTemplateRowIndex(rows, spec.rowTemplateRow)
+  if (templateIdx < 0 || !rows[templateIdx]) {
     console.warn(`CellPatch: skip clone for ${spec.id}, refusing 总计 row and no ${ELLIPSIS} row`)
     return tableFull
   }
-  const template = rows[idx]!.full
+  if (isTotalRowText(getText(rows[templateIdx].full))) {
+    console.warn(`CellPatch: skip clone for ${spec.id}, template row is 总计`)
+    return tableFull
+  }
+  const template = rows[templateIdx]!.full
   const filled = items.map((item) => fillTemplateRow(template, spec.columns, item))
-  const newRows = [...rows.slice(0, idx).map((r) => r.full), ...filled, ...rows.slice(idx + 1).map((r) => r.full)]
+
+  let insertAt = templateIdx
+  let replaceTemplate = true
+  if (spec.categoryAnchor) {
+    const found = rows.findIndex((r) => getText(r.full).includes(spec.categoryAnchor!))
+    if (found >= 0) {
+      insertAt = found + 1
+      replaceTemplate = insertAt === templateIdx
+    }
+  } else if (spec.dataInsertAfterRow != null && rows[spec.dataInsertAfterRow]) {
+    insertAt = spec.dataInsertAfterRow + 1
+    replaceTemplate = insertAt === templateIdx
+  }
+
+  const outRows: string[] = []
+  for (let i = 0; i < rows.length; i++) {
+    if (i === insertAt && replaceTemplate) {
+      outRows.push(...filled)
+      continue
+    }
+    if (i === insertAt && !replaceTemplate) {
+      outRows.push(...filled)
+    }
+    if (!replaceTemplate && i === templateIdx) continue
+    outRows.push(rows[i]!.full)
+  }
+  if (insertAt >= rows.length) outRows.push(...filled)
+
   const first = rows[0]!
   const last = rows[rows.length - 1]!
-  return replaceSlice(tableFull, first.start, last.end, newRows.join(''))
+  return replaceSlice(tableFull, first.start, last.end, outRows.join(''))
 }
 
 function applyParagraphs(xml: string, specs: ParagraphSpec[], data: Record<string, unknown>): string {

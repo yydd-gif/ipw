@@ -38,6 +38,10 @@ export interface TableFillSpec {
   tableIndex: number
   headerRow?: number
   rowTemplateRow?: number
+  /** Insert cloned rows after this index instead of replacing the …… row. */
+  dataInsertAfterRow?: number
+  /** If a row contains this text, insert data rows immediately under it (flat if not found). */
+  categoryAnchor?: string
   columns?: TableColumnSpec[]
   scalars?: Omit<CellScalarSpec, 'table'>[]
 }
@@ -88,6 +92,8 @@ interface RawTable {
   tableIndex: number
   headerRow?: number
   rowTemplateRow?: number
+  dataInsertAfterRow?: number
+  categoryAnchor?: string
   columns?: Array<string | TableColumnSpec>
   scalars?: RawScalar[]
 }
@@ -154,6 +160,8 @@ function normalizeEntry(raw: RawEntry, fillDefault: 'cell' | 'placeholder'): Tem
       tableIndex: t.tableIndex,
       headerRow: t.headerRow,
       rowTemplateRow: t.rowTemplateRow,
+      dataInsertAfterRow: t.dataInsertAfterRow,
+      categoryAnchor: t.categoryAnchor,
       columns: normalizeColumns(t.columns),
       scalars: (t.scalars ?? []).map((s) => normalizeScalar(s, t.tableIndex))
     })),
