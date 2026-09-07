@@ -22,6 +22,8 @@ M1 垂直切片：**项目主数据 → 施工日志 → 生成 2.12 项目周�
 
 ## 运行
 
+Windows 用户请看 [Windows 运行说明](docs/windows-run.md)（含系统 Node 损坏时的便携版应急）。
+
 ```bash
 npm install
 npm run dev
