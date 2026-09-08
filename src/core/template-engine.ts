@@ -245,13 +245,11 @@ export function buildTemplateData(
   }
 
   if (item.code === '7.1') {
+    // CellPatch only consumes project_name for the subtitle XXX token.
+    // CatalogView may still store overview/progress/…; do not map those into body paragraphs.
     return {
       ...base,
-      overview: payload.overview || `本项目（${project.name}）按合同 ${project.contract_no} 组织实施。`,
-      progress: payload.progress || 'TODO：建设过程概述',
-      quality: payload.quality || 'TODO：质量与安全情况',
-      issues: payload.issues || 'TODO：存在问题及整改',
-      next: payload.next || 'TODO：运维移交安排'
+      project_name: project.name
     }
   }
 
