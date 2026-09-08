@@ -208,6 +208,32 @@ async function main(): Promise<void> {
     }
   }
 
+  const sum71Path = path.join(tmp, 'projects', project.id, 'generated', '7.1_项目建设总结.docx')
+  assert(fs.existsSync(sum71Path), '7.1 docx generated')
+  const sum71Xml = new PizZip(fs.readFileSync(sum71Path)).file('word/document.xml')?.asText() ?? ''
+  const sum71Text = wtText(sum71Xml)
+  const sum71Headings = [
+    '信息化建设项目情况简介（参考模板）',
+    `${project.name}项目情况简介`,
+    '一、项目基本信息',
+    '二、项目完成目标',
+    '三、项目建设内容',
+    '四、项目建设地点',
+    '五、项目初步验收情况及付款条件',
+    '六、项目变更情况（如有）'
+  ]
+  let sum71Pos = -1
+  for (const heading of sum71Headings) {
+    const next = sum71Text.indexOf(heading)
+    assert(next > sum71Pos, `7.1 skeleton in order: ${heading}`)
+    sum71Pos = next
+  }
+  assert(!sum71Text.includes('XXX'), '7.1 replaces subtitle XXX (joined w:t)')
+  assert(
+    !sum71Text.includes('TODO：建设过程') && !sum71Text.includes('按合同'),
+    '7.1 must not paste CatalogView stub keys into the body'
+  )
+
   const hwPath = path.join(tmp, 'projects', project.id, 'generated', '7.2_软硬件清单.docx')
   assert(fs.existsSync(hwPath), '7.2 docx generated')
   const hwXml = new PizZip(fs.readFileSync(hwPath)).file('word/document.xml')?.asText() ?? ''

@@ -390,12 +390,14 @@
         {
           "key": "project_name",
           "paraIndex": 3,
-          "replacePattern": "XXX"
+          "mode": "replaceToken",
+          "replacePattern": "XXX",
+          "fallbackScan": true
         }
       ],
       "scalars": [],
       "tables": [],
-      "notes": "Mostly free-form paragraphs; layout risk — may need manual review"
+      "notes": "Free-form 6-section skeleton (0 tables). CellPatch only replaces subtitle token XXX in 「XXX项目情况简介」; keep 总题 and 一～六 headings. Do not rewrite body. Layout risk — empty/hint paragraphs may need manual review."
     },
     {
       "code": "7.2",
