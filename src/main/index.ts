@@ -239,11 +239,8 @@ ipcMain.handle(
       writeFileSync(pick.filePath, pdf)
       return { path: pick.filePath, htmlPath }
     } catch (err) {
-      const htmlDest = pick.filePath.replace(/\.pdf$/i, '') + '.html'
-      const html = (await getStudio()).itemPrintHtml(projectId, itemCode, document)
-      writeFileSync(htmlDest, html, 'utf8')
-      console.warn('printToPDF failed, wrote HTML instead:', err)
-      return { path: htmlDest, htmlPath }
+      console.warn('printToPDF failed, using simple PDF:', err)
+      return s.exportItemPdfFile(projectId, itemCode, pick.filePath, document)
     }
   }
 )
@@ -252,7 +249,7 @@ ipcMain.handle(
   'studio:printPreview',
   async (_e, projectId: string, itemCode: string, document?: TableDocument | null) => {
     const s = await getStudio()
-    if (document) s.saveEditorDocument(projectId, itemCode, document, 'draft')
+    // Preview must not save and must not mark printed.
     const htmlPath = s.writeItemPrintHtml(projectId, itemCode, document)
     const preview = new BrowserWindow({
       width: 900,

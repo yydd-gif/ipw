@@ -12,7 +12,8 @@
     "preview": "electron-vite preview",
     "generate:templates": "node scripts/generate-templates.mjs",
     "verify:m1": "tsx scripts/verify-m1.ts",
-    "test": "npm run verify:m1",
+    "verify:trial": "tsx scripts/verify-trial.ts",
+    "test": "npm run verify:trial",
     "postinstall": "node scripts/generate-templates.mjs",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit"
   },

@@ -325,8 +325,8 @@ h3.sec { margin: 0 0 12px; font-size: 16px; }
 
 .tree-item {
   display: grid;
-  grid-template-columns: 14px 52px 1fr auto;
-  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto 12px 16px;
+  gap: 8px;
   align-items: center;
   width: 100%;
   border: 0;
@@ -340,7 +340,7 @@ h3.sec { margin: 0 0 12px; font-size: 16px; }
 }
 .tree-item:hover { background: #f3e9db; }
 .tree-item.sel { background: #f0d9cc; }
-.tree-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .vol-index { margin-right: 6px; color: var(--gold); }
 .vol-count { margin-left: 8px; font-weight: 400; }
 
@@ -350,32 +350,48 @@ h3.sec { margin: 0 0 12px; font-size: 16px; }
   border-radius: 50%;
   background: #c5b8a6;
   display: inline-block;
+  justify-self: center;
 }
 .status-dot.draft { background: #d4a017; }
 .status-dot.ready { background: #2f6b4f; }
 .status-dot.empty { background: #c5b8a6; }
-.status-dot.alert { background: #c0392b; box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.18); }
+.status-dot.alert { background: #c0392b; box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.22); }
 
 .print-ico {
-  font-size: 12px;
-  color: #9a8b78;
-  white-space: nowrap;
+  display: inline-flex;
+  color: #b7a694;
+  opacity: 0.5;
+  line-height: 0;
 }
-.print-ico.printed { color: var(--green); }
+.print-ico.printed {
+  color: #1f8a4c;
+  opacity: 1;
+  filter: drop-shadow(0 0 3px rgba(31, 138, 76, 0.55));
+}
+.print-ico svg { fill: currentColor; display: block; }
 
 .imp {
   display: inline-flex;
-  margin-left: 6px;
   font-size: 11px;
   padding: 0 6px;
   border-radius: 999px;
   background: #ece7df;
   color: #6a5b4b;
-  vertical-align: middle;
+  flex-shrink: 0;
 }
 .imp-important { background: #f8d7d2; color: var(--cinnabar-dark); }
 .imp-normal { background: #efe4d4; color: #6a5b4b; }
 .imp-general { background: #e8e8e8; color: #666; }
+
+.bottom-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.print-state { font-size: 13px; color: #9a8b78; }
+.print-state.printed { color: #1f8a4c; font-weight: 700; }
+.next-round {
+  margin: 12px 0 4px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: #9a8468;
+}
 
 .doc-toolbar {
   display: flex;

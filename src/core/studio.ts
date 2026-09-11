@@ -22,6 +22,7 @@ import type {
   FilePreview,
   GenerateResult,
   ItemStatus,
+  PdfExportResult,
   PrintStatus,
   Project,
   ProjectInput,
@@ -43,6 +44,7 @@ import {
 import { parseDocxBuffer, tableDocumentToDocx } from './docx-table'
 import { computeContentFingerprint, editorDocumentFromPayload } from './fingerprint'
 import { buildItemPrintHtml } from './print-html'
+import { buildSimplePdf } from './simple-pdf'
 import { buildTemplateData, createStubDocx, fillDocx, writeFilledDocx } from './template-engine'
 
 interface InstanceRow {
@@ -699,6 +701,30 @@ export class Studio {
     const pdfPath = path.join(outDir, `${sanitizeFilePart(item.code + '_' + item.title)}.pdf`)
     fs.writeFileSync(pdfPath, pdfBytes)
     return pdfPath
+  }
+
+  /** Current-item PDF for trial. Does not mark printStatus. */
+  exportItemPdfFile(
+    projectId: string,
+    itemCode: string,
+    destPath?: string,
+    document?: TableDocument | null
+  ): PdfExportResult {
+    const htmlPath = this.writeItemPrintHtml(projectId, itemCode, document)
+    const item = getCatalogItem(itemCode)!
+    const pdf = buildSimplePdf({
+      title: `${item.code} ${item.title}`,
+      note: 'Trial current-item PDF (preview does not mark printed)'
+    })
+    const pdfPath = destPath
+      ? destPath
+      : path.join(
+          ensureDir(generatedDir(this.dirs.dataDir, projectId)),
+          `${sanitizeFilePart(item.code + '_' + item.title)}.pdf`
+        )
+    ensureDir(path.dirname(pdfPath))
+    fs.writeFileSync(pdfPath, pdf)
+    return { path: pdfPath, htmlPath }
   }
 
   previewUpload(storedPath: string): FilePreview {

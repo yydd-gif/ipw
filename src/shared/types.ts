@@ -21,7 +21,7 @@ export const STATUS_LABELS: Record<ItemStatus, string> = {
 export const EDIT_STATUS_LABELS: Record<EditStatus, string> = {
   empty: '空白',
   draft: '草稿',
-  ready: '就绪'
+  ready: '已齐'
 }
 
 export const PRINT_STATUS_LABELS: Record<PrintStatus, string> = {

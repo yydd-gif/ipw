@@ -2,8 +2,7 @@ export type ViewId = 'editor' | 'projects' | 'export' | 'logs'
 
 const PRIMARY: { id: ViewId; label: string; needProject?: boolean }[] = [
   { id: 'editor', label: '资料编辑', needProject: true },
-  { id: 'projects', label: '项目' },
-  { id: 'export', label: '出包', needProject: true }
+  { id: 'projects', label: '项目' }
 ]
 
 export default function Sidebar(props: {
@@ -33,13 +32,21 @@ export default function Sidebar(props: {
       <div className="side-foot">
         {props.projectName ? `当前项目：${props.projectName}` : '请先创建项目'}
         <br />
-        八册目录 · 条目编辑 / 打印
+        左树编辑 · 当前项打印
+        <div className="next-round">下一轮</div>
+        <button
+          className={`nav-btn secondary ${props.view === 'export' ? 'active' : ''}`}
+          disabled={!props.hasProject}
+          onClick={() => props.onView('export')}
+        >
+          整包 zip
+        </button>
         <button
           className={`nav-btn secondary ${props.view === 'logs' ? 'active' : ''}`}
           disabled={!props.hasProject}
           onClick={() => props.onView('logs')}
         >
-          施工日志（次要）
+          周月报 / 日志
         </button>
       </div>
     </aside>

@@ -131,11 +131,11 @@ export default function EditorShell(props: {
                                 currentDoc,
                                 'ready'
                               ),
-                            '已标记就绪'
+                            '已标记已齐'
                           )
                         }
                       >
-                        标记就绪
+                        标记已齐
                       </button>
                     </>
                   ) : (
@@ -158,11 +158,11 @@ export default function EditorShell(props: {
                         onClick={() =>
                           run(
                             () => window.studio.setItemStatus(props.project.id, editor.item.code, 'confirmed'),
-                            '已标记就绪'
+                            '已标记已齐'
                           )
                         }
                       >
-                        标记就绪
+                        标记已齐
                       </button>
                     </>
                   )}
@@ -198,10 +198,10 @@ export default function EditorShell(props: {
           }}
           onPreview={() => {
             if (!itemCode) return
-            void run(
-              () => window.studio.printPreview(props.project.id, itemCode, currentDoc),
-              '已打开打印预览（预览不会标记已打印）'
-            )
+            void window.studio
+              .printPreview(props.project.id, itemCode, currentDoc)
+              .then(() => props.notify('已打开打印预览（预览不算已打印）'))
+              .catch((e: unknown) => props.notify(e instanceof Error ? e.message : String(e)))
           }}
           onPrint={() => {
             if (!itemCode) return

@@ -123,7 +123,7 @@ export default function App() {
                 : '先新建或打开一个项目，再在左侧目录中编辑条目'}
             </div>
           </div>
-          <div className="muted">{busy ? '处理中…' : '试用版 · 目录编辑 / 导出打印'}</div>
+          <div className="muted">{busy ? '处理中…' : '试用 · 目录编辑 / 当前项打印'}</div>
         </header>
         <main className={view === 'editor' ? 'content content-flush' : 'content'}>
           {view === 'editor' && current && (
