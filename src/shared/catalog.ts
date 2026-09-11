@@ -1,189 +1,219 @@
-import type { CatalogItem, CatalogVolume, ProjectType } from './types'
+import type { CatalogItem, CatalogVolume, Importance, ProjectType } from './types'
 
 const ALL: ProjectType[] = ['engineering', 'gov_it', 'hybrid']
 const ENG: ProjectType[] = ['engineering', 'hybrid']
 const GOV: ProjectType[] = ['gov_it', 'hybrid']
 
+function row(
+  code: string,
+  title: string,
+  volumeId: string,
+  produceType: CatalogItem['produceType'],
+  opts: {
+    required?: boolean
+    appliesTo?: ProjectType[]
+    importance?: Importance
+    templateFile?: string
+    stubNote?: string
+  } = {}
+): CatalogItem {
+  const required = opts.required ?? false
+  return {
+    code,
+    title,
+    volumeId,
+    produceType,
+    required,
+    appliesTo: opts.appliesTo ?? ALL,
+    importance: opts.importance ?? (required ? 'important' : produceType === 'template' ? 'normal' : 'general'),
+    templateFile: opts.templateFile,
+    stubNote: opts.stubNote
+  }
+}
+
 export const CATALOG_VOLUMES: CatalogVolume[] = [
-  { id: '1', code: '01', title: '依据分册', folder: '01_依据分册', appliesTo: ALL },
-  { id: '2', code: '02', title: '过程分册', folder: '02_过程分册', appliesTo: ALL },
-  { id: '3', code: '03', title: '图纸分册', folder: '03_图纸分册', appliesTo: ALL },
-  { id: '4', code: '04', title: '变更分册', folder: '04_变更分册', appliesTo: ALL },
+  { id: '1', code: '01', title: '依据', folder: '01_依据分册', appliesTo: ALL },
+  { id: '2', code: '02', title: '过程', folder: '02_过程分册', appliesTo: ALL },
+  { id: '3', code: '03', title: '图纸', folder: '03_图纸分册', appliesTo: ALL },
+  { id: '4', code: '04', title: '变更', folder: '04_变更分册', appliesTo: ALL },
   {
     id: '5',
     code: '05',
-    title: '初步验收与试运行（政务信息化）',
+    title: '初步验收与试运行',
     folder: '05_初步验收与试运行',
     appliesTo: GOV
   },
   {
     id: '6',
     code: '06',
-    title: '竣工验收（普通/工程）',
-    folder: '06_竣工验收_普通工程',
+    title: '竣工验收报告',
+    folder: '06_竣工验收报告',
     appliesTo: ALL
   },
   {
     id: '7',
     code: '07',
-    title: '竣工验收（政务信息化）',
-    folder: '07_竣工验收_政务信息化',
+    title: '竣工验收分册',
+    folder: '07_竣工验收分册',
     appliesTo: GOV
-  }
+  },
+  { id: '8', code: '08', title: '封面页', folder: '08_封面页', appliesTo: ALL }
 ]
 
 export const CATALOG_ITEMS: CatalogItem[] = [
-  // 1 依据分册 — mostly uploads; 1.2 合同 required
-  { code: '1.1', title: '立项批复文件', volumeId: '1', produceType: 'upload', required: false, appliesTo: ALL },
-  { code: '1.2', title: '合同', volumeId: '1', produceType: 'upload', required: true, appliesTo: ALL },
-  { code: '1.3', title: '中标通知书', volumeId: '1', produceType: 'upload', required: false, appliesTo: ALL },
-  { code: '1.4', title: '设计文件及批复', volumeId: '1', produceType: 'upload', required: false, appliesTo: ALL },
-  { code: '1.5', title: '开工报告', volumeId: '1', produceType: 'upload', required: false, appliesTo: ALL },
+  // 一 依据：1.1–1.3 mostly upload
+  row('1.1', '立项批复文件', '1', 'upload', { importance: 'normal' }),
+  row('1.2', '合同', '1', 'upload', { required: true, importance: 'important' }),
+  row('1.3', '中标通知书', '1', 'upload', { importance: 'normal' }),
 
-  // 2 过程分册 — 2.1–2.5 为开工报审/授权/施工组织方案等上传件（工程/混合选填）
-  { code: '2.1', title: '开工报审表', volumeId: '2', produceType: 'upload', required: false, appliesTo: ENG },
-  {
-    code: '2.2',
-    title: '项目经理授权书及法定代表人授权书',
-    volumeId: '2',
-    produceType: 'upload',
-    required: false,
-    appliesTo: ENG
-  },
-  { code: '2.3', title: '施工组织方案报审表', volumeId: '2', produceType: 'upload', required: false, appliesTo: ENG },
-  { code: '2.4', title: '施工组织方案', volumeId: '2', produceType: 'upload', required: false, appliesTo: ENG },
-  { code: '2.5', title: '工程开工令', volumeId: '2', produceType: 'upload', required: false, appliesTo: ENG },
-  { code: '2.6', title: '材料设备进场报验', volumeId: '2', produceType: 'upload', required: true, appliesTo: ALL },
-  {
-    code: '2.7',
-    title: '设备开箱检验记录',
-    volumeId: '2',
-    produceType: 'template',
+  // 二 过程：2.1–2.5 engineering-only templates (待补模版 if file missing)
+  row('2.1', '开工报审表', '2', 'template', { appliesTo: ENG, importance: 'normal' }),
+  row('2.2', '项目经理授权书及法定代表人授权书', '2', 'template', {
+    appliesTo: ENG,
+    importance: 'normal'
+  }),
+  row('2.3', '施工组织方案报审表', '2', 'template', { appliesTo: ENG, importance: 'normal' }),
+  row('2.4', '施工组织方案', '2', 'template', { appliesTo: ENG, importance: 'normal' }),
+  row('2.5', '工程开工令', '2', 'template', { appliesTo: ENG, importance: 'normal' }),
+  row('2.6', '材料设备进场报验', '2', 'upload', { required: true, importance: 'important' }),
+  row('2.7', '设备开箱检验记录', '2', 'template', {
     required: true,
-    appliesTo: ALL,
+    importance: 'important',
     templateFile: '2.7_设备开箱检验记录.docx'
-  },
-  {
-    code: '2.8',
-    title: '设备安装记录',
-    volumeId: '2',
-    produceType: 'template',
+  }),
+  row('2.8', '设备安装记录', '2', 'template', {
     required: true,
-    appliesTo: ALL,
+    importance: 'important',
     templateFile: '2.8_设备安装记录.docx'
-  },
-  { code: '2.9', title: '系统调试记录', volumeId: '2', produceType: 'upload', required: true, appliesTo: ALL },
-  {
-    code: '2.10',
-    title: '施工日志',
-    volumeId: '2',
-    produceType: 'template',
-    required: false,
-    appliesTo: ALL,
+  }),
+  row('2.9', '系统调试记录', '2', 'upload', { required: true, importance: 'important' }),
+  row('2.10', '施工日志', '2', 'template', {
+    importance: 'normal',
     templateFile: '2.10_施工日志.docx'
-  },
-  {
-    code: '2.11',
-    title: '项目月报',
-    volumeId: '2',
-    produceType: 'derived',
-    required: false,
-    appliesTo: ALL,
+  }),
+  row('2.11', '项目月报', '2', 'derived', {
+    importance: 'general',
     templateFile: '2.11_项目月报.docx'
-  },
-  {
-    code: '2.12',
-    title: '项目周报',
-    volumeId: '2',
-    produceType: 'derived',
-    required: false,
-    appliesTo: ALL,
+  }),
+  row('2.12', '项目周报', '2', 'derived', {
+    importance: 'general',
     templateFile: '2.12_项目周报.docx'
-  },
-  { code: '2.13', title: '过程质量评定资料', volumeId: '2', produceType: 'upload', required: true, appliesTo: ALL },
+  }),
+  row('2.13', '过程质量评定资料', '2', 'upload', { required: true, importance: 'important' }),
 
-  // 3 图纸分册 — uploads
-  { code: '3.1', title: '竣工图纸', volumeId: '3', produceType: 'upload', required: false, appliesTo: ALL },
-  { code: '3.2', title: '设计变更图纸', volumeId: '3', produceType: 'upload', required: false, appliesTo: ALL },
-  { code: '3.3', title: '系统拓扑与部署图', volumeId: '3', produceType: 'upload', required: false, appliesTo: GOV },
+  // 三 图纸：all upload
+  row('3.1', '竣工图纸', '3', 'upload', { importance: 'normal' }),
+  row('3.2', '设计变更图纸', '3', 'upload', { importance: 'general' }),
+  row('3.3', '系统拓扑与部署图', '3', 'upload', { appliesTo: GOV, importance: 'normal' }),
 
-  // 4 变更分册 — uploads if any
-  { code: '4.1', title: '变更申请与审批', volumeId: '4', produceType: 'upload', required: false, appliesTo: ALL },
-  { code: '4.2', title: '现场签证', volumeId: '4', produceType: 'upload', required: false, appliesTo: ALL },
+  // 四 变更：upload
+  row('4.1', '变更申请与审批', '4', 'upload', { importance: 'normal' }),
+  row('4.2', '现场签证', '4', 'upload', { importance: 'general' }),
 
-  // 5 初步验收与试运行（政务信息化）required 5.1/5.4/5.6/5.7/5.8/5.9
-  { code: '5.1', title: '初步验收申请', volumeId: '5', produceType: 'upload', required: true, appliesTo: GOV },
-  { code: '5.2', title: '试运行方案', volumeId: '5', produceType: 'upload', required: false, appliesTo: GOV },
-  { code: '5.3', title: '试运行记录', volumeId: '5', produceType: 'upload', required: false, appliesTo: GOV },
-  { code: '5.4', title: '试运行报告', volumeId: '5', produceType: 'upload', required: true, appliesTo: GOV },
-  { code: '5.5', title: '问题整改闭环', volumeId: '5', produceType: 'upload', required: false, appliesTo: GOV },
-  { code: '5.6', title: '用户培训记录', volumeId: '5', produceType: 'upload', required: true, appliesTo: GOV },
-  { code: '5.7', title: '用户确认书', volumeId: '5', produceType: 'upload', required: true, appliesTo: GOV },
-  { code: '5.8', title: '初步验收意见', volumeId: '5', produceType: 'upload', required: true, appliesTo: GOV },
-  { code: '5.9', title: '初步验收会议纪要', volumeId: '5', produceType: 'upload', required: true, appliesTo: GOV },
-
-  // 6 竣工验收（普通/工程）6.2 required; 6.1 engineering optional
-  {
-    code: '6.1',
-    title: '工程竣工报告',
-    volumeId: '6',
-    produceType: 'upload',
-    required: false,
-    appliesTo: ENG
-  },
-  {
-    code: '6.2',
-    title: '竣工验收报告',
-    volumeId: '6',
-    produceType: 'template',
+  // 五 初验试运行（政务）：mix template / upload
+  row('5.1', '初步验收申请', '5', 'upload', {
     required: true,
-    appliesTo: ALL,
+    appliesTo: GOV,
+    importance: 'important'
+  }),
+  row('5.2', '试运行方案', '5', 'template', { appliesTo: GOV, importance: 'normal' }),
+  row('5.3', '试运行记录', '5', 'template', { appliesTo: GOV, importance: 'normal' }),
+  row('5.4', '试运行报告', '5', 'upload', {
+    required: true,
+    appliesTo: GOV,
+    importance: 'important'
+  }),
+  row('5.5', '问题整改闭环', '5', 'upload', { appliesTo: GOV, importance: 'general' }),
+  row('5.6', '用户培训记录', '5', 'upload', {
+    required: true,
+    appliesTo: GOV,
+    importance: 'important'
+  }),
+  row('5.7', '用户确认书', '5', 'upload', {
+    required: true,
+    appliesTo: GOV,
+    importance: 'important'
+  }),
+  row('5.8', '初步验收意见', '5', 'upload', {
+    required: true,
+    appliesTo: GOV,
+    importance: 'important'
+  }),
+  row('5.9', '初步验收会议纪要', '5', 'upload', {
+    required: true,
+    appliesTo: GOV,
+    importance: 'important'
+  }),
+
+  // 六 竣工验收报告：trial subset — a few openable pages + placeholders
+  row('6.1', '报告封面', '6', 'template', { importance: 'normal' }),
+  row('6.2', '竣工验收报告', '6', 'template', {
+    required: true,
+    importance: 'important',
     templateFile: '6.2_竣工验收报告.docx'
-  },
+  }),
+  row('6.3', '报告目录', '6', 'template', { importance: 'general' }),
+  row('6.4', '验收结论', '6', 'template', { importance: 'normal' }),
 
-  // 7 竣工验收（政务信息化）
-  {
-    code: '7.1',
-    title: '项目建设总结',
-    volumeId: '7',
-    produceType: 'template',
+  // 七 竣工验收分册（政务）：mostly template; 7.4 / 7.5 upload
+  row('7.1', '项目建设总结', '7', 'template', {
     required: true,
     appliesTo: GOV,
+    importance: 'important',
     templateFile: '7.1_项目建设总结.docx'
-  },
-  {
-    code: '7.2',
-    title: '软硬件清单',
-    volumeId: '7',
-    produceType: 'template',
+  }),
+  row('7.2', '软硬件清单', '7', 'template', {
     required: true,
     appliesTo: GOV,
+    importance: 'important',
     templateFile: '7.2_软硬件清单.docx'
-  },
-  {
-    code: '7.4',
-    title: '安全测评报告',
-    volumeId: '7',
-    produceType: 'derived',
+  }),
+  row('7.3', '系统测试报告', '7', 'template', { appliesTo: GOV, importance: 'normal' }),
+  row('7.4', '安全测评报告', '7', 'upload', {
     required: true,
     appliesTo: GOV,
-    stubNote: '后期自动生成'
-  },
-  {
-    code: '7.5',
-    title: '密码测评与等保材料',
-    volumeId: '7',
-    produceType: 'derived',
+    importance: 'important'
+  }),
+  row('7.5', '密码测评与等保材料', '7', 'upload', {
     required: true,
     appliesTo: GOV,
-    stubNote: '后期自动生成'
-  },
-  { code: '7.6', title: '培训教材', volumeId: '7', produceType: 'upload', required: true, appliesTo: GOV },
-  { code: '7.7', title: '操作手册', volumeId: '7', produceType: 'upload', required: true, appliesTo: GOV },
-  { code: '7.8', title: '维护手册', volumeId: '7', produceType: 'upload', required: true, appliesTo: GOV },
-  { code: '7.9', title: '源代码及开发文档', volumeId: '7', produceType: 'upload', required: true, appliesTo: GOV },
-  { code: '7.10', title: '竣工验收申请', volumeId: '7', produceType: 'upload', required: true, appliesTo: GOV },
-  { code: '7.11', title: '竣工验收意见', volumeId: '7', produceType: 'upload', required: true, appliesTo: GOV }
+    importance: 'important'
+  }),
+  row('7.6', '培训教材', '7', 'template', {
+    required: true,
+    appliesTo: GOV,
+    importance: 'important'
+  }),
+  row('7.7', '操作手册', '7', 'template', {
+    required: true,
+    appliesTo: GOV,
+    importance: 'important'
+  }),
+  row('7.8', '维护手册', '7', 'template', {
+    required: true,
+    appliesTo: GOV,
+    importance: 'important'
+  }),
+  row('7.9', '源代码及开发文档', '7', 'template', {
+    required: true,
+    appliesTo: GOV,
+    importance: 'important'
+  }),
+  row('7.10', '竣工验收申请', '7', 'template', {
+    required: true,
+    appliesTo: GOV,
+    importance: 'important'
+  }),
+  row('7.11', '竣工验收意见', '7', 'template', {
+    required: true,
+    appliesTo: GOV,
+    importance: 'important'
+  }),
+
+  // 八 封面页
+  row('8.1', '总封面', '8', 'template', { importance: 'normal' }),
+  row('8.2', '总目录', '8', 'template', { importance: 'normal' }),
+  row('8.3', '分册隔页', '8', 'template', { importance: 'general' })
 ]
 
 export function itemApplies(item: CatalogItem, type: ProjectType): boolean {
@@ -221,6 +251,10 @@ export function isRequiredComplete(args: {
   uploadCount?: number
 }): boolean {
   if (!args.required) return true
-  if (args.status === 'confirmed' || args.status === 'waived') return true
+  if (args.status === 'confirmed' || args.status === 'waived' || args.status === 'ready') return true
   return false
+}
+
+export function treeAlertDot(importance: Importance, editStatus: string): boolean {
+  return importance === 'important' && editStatus === 'empty'
 }

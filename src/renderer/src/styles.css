@@ -89,6 +89,7 @@ button, input, select, textarea { font-family: inherit; }
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
 }
 
 .topbar {
@@ -255,3 +256,183 @@ table.data tr.sel { background: #f6e6dc; }
 
 h3.sec { margin: 0 0 12px; font-size: 16px; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+
+.content-flush {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.nav-btn.secondary {
+  margin-top: 12px;
+  font-size: 12px;
+  padding: 8px 10px;
+  opacity: 0.85;
+}
+
+.editor-shell {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.editor-left {
+  overflow: auto;
+  border-radius: 0;
+  border: 0;
+  border-right: 1px solid var(--line);
+  box-shadow: none;
+  padding: 12px 10px 24px;
+}
+
+.editor-right {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--paper);
+}
+
+.editor-pane {
+  flex: 1;
+  overflow: auto;
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
+}
+
+.editor-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.editor-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--paper-2);
+}
+
+.tree-item {
+  display: grid;
+  grid-template-columns: 14px 52px 1fr auto;
+  gap: 6px;
+  align-items: center;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 7px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  color: inherit;
+  font-size: 13px;
+}
+.tree-item:hover { background: #f3e9db; }
+.tree-item.sel { background: #f0d9cc; }
+.tree-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vol-index { margin-right: 6px; color: var(--gold); }
+.vol-count { margin-left: 8px; font-weight: 400; }
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #c5b8a6;
+  display: inline-block;
+}
+.status-dot.draft { background: #d4a017; }
+.status-dot.ready { background: #2f6b4f; }
+.status-dot.empty { background: #c5b8a6; }
+.status-dot.alert { background: #c0392b; box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.18); }
+
+.print-ico {
+  font-size: 12px;
+  color: #9a8b78;
+  white-space: nowrap;
+}
+.print-ico.printed { color: var(--green); }
+
+.imp {
+  display: inline-flex;
+  margin-left: 6px;
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #ece7df;
+  color: #6a5b4b;
+  vertical-align: middle;
+}
+.imp-important { background: #f8d7d2; color: var(--cinnabar-dark); }
+.imp-normal { background: #efe4d4; color: #6a5b4b; }
+.imp-general { background: #e8e8e8; color: #666; }
+
+.doc-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+.toolbar-sep { width: 1px; background: var(--line); margin: 0 4px; }
+
+.doc-para {
+  width: 100%;
+  min-height: 56px;
+  margin: 6px 0;
+}
+
+.table-wrap { overflow: auto; margin: 12px 0 18px; }
+.edit-table {
+  border-collapse: collapse;
+  width: 100%;
+  background: #fff;
+}
+.edit-table td {
+  border: 1px solid #c8b79a;
+  padding: 0;
+  min-width: 88px;
+  vertical-align: top;
+}
+.edit-table td.cell-sel { outline: 2px solid var(--seal); outline-offset: -2px; }
+.edit-table textarea {
+  width: 100%;
+  min-height: 42px;
+  border: 0;
+  border-radius: 0;
+  resize: vertical;
+  background: transparent;
+}
+
+.upload-list { list-style: none; padding: 0; display: grid; gap: 12px; }
+.upload-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  background: #fff;
+}
+.upload-preview {
+  max-width: 100%;
+  max-height: 360px;
+  margin-top: 8px;
+  border-radius: 8px;
+}
+.upload-preview.pdf { width: 100%; height: 360px; border: 0; }
+.upload-text {
+  white-space: pre-wrap;
+  font-size: 12px;
+  background: #f7f1e8;
+  padding: 8px;
+  border-radius: 8px;
+  max-height: 240px;
+  overflow: auto;
+}

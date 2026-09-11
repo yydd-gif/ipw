@@ -1,9 +1,8 @@
-export type ViewId = 'projects' | 'catalog' | 'logs' | 'export'
+export type ViewId = 'editor' | 'projects' | 'export' | 'logs'
 
-const ITEMS: { id: ViewId; label: string; needProject?: boolean }[] = [
+const PRIMARY: { id: ViewId; label: string; needProject?: boolean }[] = [
+  { id: 'editor', label: '资料编辑', needProject: true },
   { id: 'projects', label: '项目' },
-  { id: 'catalog', label: '资料目录', needProject: true },
-  { id: 'logs', label: '施工日志', needProject: true },
   { id: 'export', label: '出包', needProject: true }
 ]
 
@@ -17,10 +16,10 @@ export default function Sidebar(props: {
     <aside className="sidebar">
       <div className="brand">
         <h1>验收到手</h1>
-        <p>Acceptance Studio · M1</p>
+        <p>试用版验收资料编辑器</p>
       </div>
       <nav>
-        {ITEMS.map((item) => (
+        {PRIMARY.map((item) => (
           <button
             key={item.id}
             className={`nav-btn ${props.view === item.id ? 'active' : ''}`}
@@ -34,7 +33,14 @@ export default function Sidebar(props: {
       <div className="side-foot">
         {props.projectName ? `当前项目：${props.projectName}` : '请先创建项目'}
         <br />
-        七卷目录组卷 · 本地 SQLite
+        八册目录 · 条目编辑 / 打印
+        <button
+          className={`nav-btn secondary ${props.view === 'logs' ? 'active' : ''}`}
+          disabled={!props.hasProject}
+          onClick={() => props.onView('logs')}
+        >
+          施工日志（次要）
+        </button>
       </div>
     </aside>
   )

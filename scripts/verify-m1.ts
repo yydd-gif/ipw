@@ -196,6 +196,38 @@ async function main(): Promise<void> {
     'incomplete toast reports batch n and required progress separately'
   )
 
+  const ed27 = studio.getEditorDocument(project.id, '2.7')
+  assert(ed27.pane === 'doc', '2.7 opens as table/doc pane')
+  assert((ed27.document?.tables.length ?? 0) > 0, '2.7 parsed at least one table from template')
+  const doc27 = ed27.document!
+  doc27.tables[0]!.rows[0]![0]!.text = '试用编辑单元格'
+  const saved = studio.saveEditorDocument(project.id, '2.7', doc27, 'draft')
+  assert(saved.editStatus === 'draft', 'save as draft')
+  assert(saved.contentFingerprint.length >= 8, 'content fingerprint set')
+  assert(saved.printStatus === 'unprinted', 'new content is unprinted')
+  const printed = studio.markItemPrinted(project.id, '2.7')
+  assert(printed.printStatus === 'printed', 'print success marks printed')
+  assert(printed.lastPrintedFingerprint === saved.contentFingerprint, 'print stores fingerprint')
+  doc27.tables[0]!.rows[0]![0]!.text = '再次修改后应回到未打印'
+  const saved2 = studio.saveEditorDocument(project.id, '2.7', doc27, 'ready')
+  assert(saved2.editStatus === 'ready', 'mark ready')
+  assert(saved2.printStatus === 'unprinted', 'edit resets print status to unprinted')
+  const htmlPath = studio.writeItemPrintHtml(project.id, '2.7', doc27)
+  const html = fs.readFileSync(htmlPath, 'utf8')
+  assert(html.includes('再次修改') || html.includes('试用编辑'), 'export html contains edited cell')
+  assert(html.includes('2.7'), 'export html has item code')
+
+  const ed12 = studio.getEditorDocument(project.id, '1.2')
+  assert(ed12.pane === 'upload', '1.2 contract uses upload pane')
+  assert(ed12.document === null, 'upload item has no fake table')
+
+  const ed21 = studio.getEditorDocument(project.id, '2.1')
+  assert(ed21.pane === 'upload', '2.1 without template file is not a fake table')
+  assert(ed21.templateMissing, '2.1 shows 待补模版')
+
+  const ed61 = studio.getEditorDocument(project.id, '6.1')
+  assert(ed61.templateMissing, '6.1 cover is a trial placeholder')
+
   for (const item of itemsForProjectType('hybrid')) {
     if (item.produceType === 'template' || item.produceType === 'derived') {
       if (item.code === '2.10' || item.code === '2.12') continue
@@ -286,6 +318,53 @@ async function main(): Promise<void> {
     catalogState.some((v) => v.volume.id === '5' && v.items.some((i) => i.item.code === '5.1')),
     'gov-IT items enabled in hybrid'
   )
+  assert(catalogState.length === 8, 'hybrid has eight books')
+  assert(
+    catalogState.some((v) => v.volume.id === '8' && v.items.some((i) => i.item.code === '8.1')),
+    'book 8 cover pages present'
+  )
+  assert(
+    catalogState.find((v) => v.volume.id === '6')?.volume.title === '竣工验收报告',
+    'book 6 is 竣工验收报告'
+  )
+  assert(
+    catalogState.find((v) => v.volume.id === '7')?.volume.title === '竣工验收分册',
+    'book 7 is 竣工验收分册'
+  )
+
+  const eng = studio.createProject({
+    name: '工程型项目',
+    type: 'engineering',
+    owner: '业主',
+    supervisor: '监理',
+    contractor: '施工',
+    contract_no: 'ENG-1',
+    phase: '施工',
+    doc_no: 'E-1'
+  })
+  const engState = studio.getCatalogState(eng.id)
+  assert(
+    engState.some((v) => v.items.some((i) => i.item.code === '2.1')),
+    'engineering has 2.1–2.5'
+  )
+  assert(!engState.some((v) => v.volume.id === '5'), 'engineering hides book 5')
+  assert(!engState.some((v) => v.volume.id === '7'), 'engineering hides book 7')
+  assert(engState.some((v) => v.volume.id === '8'), 'engineering still has cover book')
+
+  const gov = studio.createProject({
+    name: '政务型项目',
+    type: 'gov_it',
+    owner: '局方',
+    supervisor: '监理',
+    contractor: '集成',
+    contract_no: 'GOV-1',
+    phase: '验收',
+    doc_no: 'G-1'
+  })
+  const govState = studio.getCatalogState(gov.id)
+  assert(!govState.some((v) => v.items.some((i) => i.item.code === '2.1')), 'gov_it hides 2.1–2.5')
+  assert(govState.some((v) => v.volume.id === '5'), 'gov_it has book 5')
+  assert(govState.some((v) => v.volume.id === '7'), 'gov_it has book 7')
 
   const dummy21 = path.join(tmp, 'dummy-2.1.txt')
   fs.writeFileSync(dummy21, '占位 开工报审表\n')
@@ -318,7 +397,9 @@ async function main(): Promise<void> {
   assert(!joined.includes('检验批'), 'zip must not use 检验批 folder names')
   assert(joined.includes('1.2_合同'), 'contract folder in zip')
   assert(joined.includes('02_过程分册'), 'volume 2 folder')
-  assert(joined.includes('07_竣工验收_政务信息化'), 'gov volume present for hybrid')
+  assert(joined.includes('07_竣工验收分册'), 'gov volume present for hybrid')
+  assert(joined.includes('06_竣工验收报告'), 'report volume folder')
+  assert(joined.includes('08_封面页'), 'cover volume folder')
   assert(joined.includes('2.7_设备开箱'), 'template item folder uses catalog code')
 
   const indexFile = names.find((n) => n.endsWith('00_目录与校验报告.md'))!

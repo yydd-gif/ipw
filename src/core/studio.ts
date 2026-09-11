@@ -17,14 +17,19 @@ import type {
   CatalogVolumeState,
   DailyLog,
   DailyLogInput,
+  EditorDocumentState,
   ExportCheck,
+  FilePreview,
   GenerateResult,
   ItemStatus,
+  PrintStatus,
   Project,
   ProjectInput,
+  TableDocument,
   UploadRecord,
   WeeklyReportOptions
 } from '../shared/types'
+import { editStatusFrom } from '../shared/types'
 import { SqliteStore } from './db'
 import {
   ensureDir,
@@ -35,7 +40,10 @@ import {
   uploadsDir,
   type StudioDirs
 } from './paths'
-import { buildTemplateData, createStubDocx, writeFilledDocx } from './template-engine'
+import { parseDocxBuffer, tableDocumentToDocx } from './docx-table'
+import { computeContentFingerprint, editorDocumentFromPayload } from './fingerprint'
+import { buildItemPrintHtml } from './print-html'
+import { buildTemplateData, createStubDocx, fillDocx, writeFilledDocx } from './template-engine'
 
 interface InstanceRow {
   id: string
@@ -46,6 +54,10 @@ interface InstanceRow {
   generated_path: string | null
   notes: string
   updated_at: string
+  print_status?: string
+  content_fingerprint?: string
+  last_printed_at?: string | null
+  last_printed_fingerprint?: string
 }
 
 interface UploadRow {
@@ -68,11 +80,17 @@ function parseInstance(row: InstanceRow): CatalogInstance {
   } catch {
     payload = {}
   }
+  const status = row.status as ItemStatus
   return {
     id: row.id,
     project_id: row.project_id,
     item_code: row.item_code,
-    status: row.status as ItemStatus,
+    status,
+    editStatus: editStatusFrom(status),
+    printStatus: (row.print_status === 'printed' ? 'printed' : 'unprinted') as PrintStatus,
+    contentFingerprint: row.content_fingerprint || '',
+    lastPrintedAt: row.last_printed_at || null,
+    lastPrintedFingerprint: row.last_printed_fingerprint || '',
     payload,
     generated_path: row.generated_path,
     notes: row.notes || '',
@@ -183,8 +201,8 @@ export class Studio {
       )
       if (!existing) {
         this.store.exec(
-          `INSERT INTO catalog_instances (id, project_id, item_code, status, payload, generated_path, notes, updated_at)
-           VALUES (?, ?, ?, 'empty', '{}', NULL, '', ?)`,
+          `INSERT INTO catalog_instances (id, project_id, item_code, status, payload, generated_path, notes, updated_at, print_status, content_fingerprint, last_printed_at, last_printed_fingerprint)
+           VALUES (?, ?, ?, 'empty', '{}', NULL, '', ?, 'unprinted', '', NULL, '')`,
           [randomUUID(), project.id, item.code, ts]
         )
       }
@@ -287,6 +305,11 @@ export class Studio {
               project_id: projectId,
               item_code: item.code,
               status: 'empty',
+              editStatus: 'empty',
+              printStatus: 'unprinted',
+              contentFingerprint: '',
+              lastPrintedAt: null,
+              lastPrintedFingerprint: '',
               payload: {},
               generated_path: null,
               notes: '',
@@ -318,10 +341,17 @@ export class Studio {
     this.ensureInstance(projectId, itemCode)
     const current = this.getInstance(projectId, itemCode)
     const merged = { ...current.payload, ...payload }
+    const uploads = this.uploadsFor(projectId, itemCode)
+    const fingerprint = computeContentFingerprint({
+      document: editorDocumentFromPayload(merged),
+      uploads
+    })
+    const printReset = fingerprint !== current.lastPrintedFingerprint
     this.store.exec(
-      `UPDATE catalog_instances SET payload=?, status=CASE WHEN status='empty' THEN 'draft' ELSE status END, updated_at=?
+      `UPDATE catalog_instances SET payload=?, status=CASE WHEN status='empty' THEN 'draft' ELSE status END,
+       content_fingerprint=?, print_status=CASE WHEN ? = 1 THEN 'unprinted' ELSE print_status END, updated_at=?
        WHERE project_id=? AND item_code=?`,
-      [JSON.stringify(merged), nowISO(), projectId, itemCode]
+      [JSON.stringify(merged), fingerprint, printReset ? 1 : 0, nowISO(), projectId, itemCode]
     )
     return this.getInstance(projectId, itemCode)
   }
@@ -353,11 +383,7 @@ export class Studio {
       `INSERT INTO uploads (id, project_id, item_code, original_name, stored_path, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
       [rec.id, rec.project_id, rec.item_code, rec.original_name, rec.stored_path, rec.created_at]
     )
-    this.store.exec(
-      `UPDATE catalog_instances SET status=CASE WHEN status='empty' THEN 'draft' ELSE status END, updated_at=?
-       WHERE project_id=? AND item_code=?`,
-      [nowISO(), projectId, itemCode]
-    )
+    this.refreshFingerprint(projectId, itemCode, { bumpDraft: true })
     this.touchProject(projectId)
     return rec
   }
@@ -396,48 +422,61 @@ export class Studio {
       const buf = createStubDocx(`${item.code} ${item.title}`, item.stubNote)
       fs.writeFileSync(outPath, buf)
     } else {
-      if (!item.templateFile) {
-        throw new Error(`条目 ${itemCode} 没有关联 Word 模板`)
-      }
-      const templatePath = path.join(this.dirs.templatesDir, item.templateFile)
-      const logs = this.listLogs(projectId)
-      if ((itemCode === '2.12' || itemCode === '2.11') && !weekly) {
-        weekly = {
-          period_start: logs[0]?.date || todayISO(),
-          period_end: todayISO()
-        }
-      }
-      const filtered = filterLogsByPeriod(logs, weekly?.period_start, weekly?.period_end)
-      const fillOpts = { code: item.code, templatesDir: this.dirs.templatesDir }
-      if (itemCode === '2.10') {
-        const prefix = sanitizeFilePart(`${item.code}_${item.title}`)
-        clearGeneratedPrefix(outDir, prefix)
-        const targets = filtered.length > 0 ? filtered : [null]
-        const paths: string[] = []
-        for (const log of targets) {
-          const data = buildTemplateData(item, project, instance.payload, {
-            logs: log ? [log] : [],
-            weekly
-          })
-          const suffix = log ? `_${sanitizeFilePart(log.date)}` : ''
-          const outFile = uniquePath(path.join(outDir, `${prefix}${suffix}.docx`))
-          writeFilledDocx(templatePath, outFile, data, fillOpts)
-          paths.push(outFile)
-        }
-        const primary = paths[paths.length - 1]!
-        this.store.exec(
-          `UPDATE catalog_instances SET generated_path=?, status=CASE WHEN status='confirmed' THEN 'confirmed' ELSE 'draft' END,
-           payload=?, updated_at=? WHERE project_id=? AND item_code=?`,
-          [primary, JSON.stringify({ ...instance.payload, generated_paths: paths }), nowISO(), projectId, itemCode]
+      const savedDoc = editorDocumentFromPayload(instance.payload)
+      const templatePath = item.templateFile
+        ? path.join(this.dirs.templatesDir, item.templateFile)
+        : ''
+      const hasTemplate = Boolean(templatePath && fs.existsSync(templatePath))
+      if (savedDoc && (savedDoc.tables.length > 0 || savedDoc.paragraphs.length > 0)) {
+        fs.writeFileSync(outPath, tableDocumentToDocx(savedDoc))
+      } else if (!hasTemplate) {
+        const buf = createStubDocx(
+          `${item.code} ${item.title}`,
+          item.produceType === 'template'
+            ? '待补模版。试用版可上传原件或等待模板补齐。'
+            : '本条目尚无关联 Word 模板。'
         )
-        this.touchProject(projectId)
-        return { path: primary, itemCode, paths }
+        fs.writeFileSync(outPath, buf)
+      } else {
+        const logs = this.listLogs(projectId)
+        if ((itemCode === '2.12' || itemCode === '2.11') && !weekly) {
+          weekly = {
+            period_start: logs[0]?.date || todayISO(),
+            period_end: todayISO()
+          }
+        }
+        const filtered = filterLogsByPeriod(logs, weekly?.period_start, weekly?.period_end)
+        const fillOpts = { code: item.code, templatesDir: this.dirs.templatesDir }
+        if (itemCode === '2.10') {
+          const prefix = sanitizeFilePart(`${item.code}_${item.title}`)
+          clearGeneratedPrefix(outDir, prefix)
+          const targets = filtered.length > 0 ? filtered : [null]
+          const paths: string[] = []
+          for (const log of targets) {
+            const data = buildTemplateData(item, project, instance.payload, {
+              logs: log ? [log] : [],
+              weekly
+            })
+            const suffix = log ? `_${sanitizeFilePart(log.date)}` : ''
+            const outFile = uniquePath(path.join(outDir, `${prefix}${suffix}.docx`))
+            writeFilledDocx(templatePath, outFile, data, fillOpts)
+            paths.push(outFile)
+          }
+          const primary = paths[paths.length - 1]!
+          this.store.exec(
+            `UPDATE catalog_instances SET generated_path=?, status=CASE WHEN status='confirmed' THEN 'confirmed' ELSE 'draft' END,
+             payload=?, updated_at=? WHERE project_id=? AND item_code=?`,
+            [primary, JSON.stringify({ ...instance.payload, generated_paths: paths }), nowISO(), projectId, itemCode]
+          )
+          this.touchProject(projectId)
+          return { path: primary, itemCode, paths }
+        }
+        const data = buildTemplateData(item, project, instance.payload, {
+          logs: filtered,
+          weekly
+        })
+        writeFilledDocx(templatePath, outPath, data, fillOpts)
       }
-      const data = buildTemplateData(item, project, instance.payload, {
-        logs: filtered,
-        weekly
-      })
-      writeFilledDocx(templatePath, outPath, data, fillOpts)
     }
 
     this.store.exec(
@@ -528,6 +567,190 @@ export class Studio {
     return { path: out, check }
   }
 
+  getEditorDocument(projectId: string, itemCode: string): EditorDocumentState {
+    const project = this.getProject(projectId)
+    const item = getCatalogItem(itemCode)
+    if (!item || !itemApplies(item, project.type)) {
+      throw new Error(`条目 ${itemCode} 不适用于当前项目`)
+    }
+    this.ensureInstance(projectId, itemCode)
+    const instance = this.getInstance(projectId, itemCode)
+    const uploads = this.uploadsFor(projectId, itemCode)
+    const saved = editorDocumentFromPayload(instance.payload)
+    const templatePath = item.templateFile
+      ? path.join(this.dirs.templatesDir, item.templateFile)
+      : ''
+    const hasTemplate = Boolean(templatePath && fs.existsSync(templatePath))
+
+    if (saved) {
+      return {
+        pane: 'doc',
+        templateMissing: !hasTemplate,
+        document: saved,
+        item,
+        instance,
+        uploads,
+        message: hasTemplate ? undefined : '已保存草稿。关联模板尚未入库。'
+      }
+    }
+
+    if (hasTemplate) {
+      const logs = this.listLogs(projectId)
+      const data = buildTemplateData(item, project, instance.payload, { logs })
+      const buf = fillDocx(templatePath, data, { code: item.code, templatesDir: this.dirs.templatesDir })
+      return {
+        pane: 'doc',
+        templateMissing: false,
+        document: parseDocxBuffer(buf),
+        item,
+        instance,
+        uploads
+      }
+    }
+
+    if (item.produceType === 'template' || item.produceType === 'derived') {
+      return {
+        pane: 'upload',
+        templateMissing: true,
+        document: null,
+        item,
+        instance,
+        uploads,
+        message: '待补模版。本条目可先上传原件，或等待 Word 模板入库后再在表格中编辑。'
+      }
+    }
+
+    return {
+      pane: 'upload',
+      templateMissing: false,
+      document: null,
+      item,
+      instance,
+      uploads,
+      message: item.stubNote
+    }
+  }
+
+  saveEditorDocument(
+    projectId: string,
+    itemCode: string,
+    document: TableDocument,
+    as: 'draft' | 'ready' = 'draft'
+  ): CatalogInstance {
+    this.ensureInstance(projectId, itemCode)
+    const current = this.getInstance(projectId, itemCode)
+    const merged = { ...current.payload, editorDocument: document }
+    const uploads = this.uploadsFor(projectId, itemCode)
+    const fingerprint = computeContentFingerprint({ document, uploads })
+    const printReset = fingerprint !== current.lastPrintedFingerprint
+    const status: ItemStatus =
+      as === 'ready' ? 'confirmed' : current.status === 'confirmed' ? 'confirmed' : 'draft'
+    const outDir = ensureDir(generatedDir(this.dirs.dataDir, projectId))
+    const item = getCatalogItem(itemCode)!
+    const titled = document.title ? document : { ...document, title: `${item.code} ${item.title}` }
+    const outPath = path.join(outDir, `${sanitizeFilePart(item.code + '_' + item.title)}.docx`)
+    fs.writeFileSync(outPath, tableDocumentToDocx(titled))
+    this.store.exec(
+      `UPDATE catalog_instances SET payload=?, status=?, content_fingerprint=?,
+       print_status=CASE WHEN ? = 1 THEN 'unprinted' ELSE print_status END,
+       generated_path=?, updated_at=? WHERE project_id=? AND item_code=?`,
+      [JSON.stringify(merged), status, fingerprint, printReset ? 1 : 0, outPath, nowISO(), projectId, itemCode]
+    )
+    this.touchProject(projectId)
+    return this.getInstance(projectId, itemCode)
+  }
+
+  markItemPrinted(projectId: string, itemCode: string, fingerprint?: string): CatalogInstance {
+    this.ensureInstance(projectId, itemCode)
+    const current = this.getInstance(projectId, itemCode)
+    const fp = fingerprint || current.contentFingerprint
+    this.store.exec(
+      `UPDATE catalog_instances SET print_status='printed', last_printed_at=?, last_printed_fingerprint=?, updated_at=?
+       WHERE project_id=? AND item_code=?`,
+      [nowISO(), fp, nowISO(), projectId, itemCode]
+    )
+    this.touchProject(projectId)
+    return this.getInstance(projectId, itemCode)
+  }
+
+  itemPrintHtml(projectId: string, itemCode: string, document?: TableDocument | null): string {
+    const project = this.getProject(projectId)
+    const editor = this.getEditorDocument(projectId, itemCode)
+    return buildItemPrintHtml({
+      project,
+      item: editor.item,
+      document: document ?? editor.document,
+      uploads: editor.uploads
+    })
+  }
+
+  writeItemPrintHtml(projectId: string, itemCode: string, document?: TableDocument | null): string {
+    const html = this.itemPrintHtml(projectId, itemCode, document)
+    const item = getCatalogItem(itemCode)!
+    const outDir = ensureDir(generatedDir(this.dirs.dataDir, projectId))
+    const htmlPath = path.join(outDir, `${sanitizeFilePart(item.code + '_' + item.title)}.html`)
+    fs.writeFileSync(htmlPath, html, 'utf8')
+    return htmlPath
+  }
+
+  writeItemPdfBytes(projectId: string, itemCode: string, pdfBytes: Buffer): string {
+    const item = getCatalogItem(itemCode)!
+    const outDir = ensureDir(generatedDir(this.dirs.dataDir, projectId))
+    const pdfPath = path.join(outDir, `${sanitizeFilePart(item.code + '_' + item.title)}.pdf`)
+    fs.writeFileSync(pdfPath, pdfBytes)
+    return pdfPath
+  }
+
+  previewUpload(storedPath: string): FilePreview {
+    const name = path.basename(storedPath)
+    if (!fs.existsSync(storedPath)) {
+      return { kind: 'other', name }
+    }
+    const dataDir = path.resolve(this.dirs.dataDir)
+    const resolved = path.resolve(storedPath)
+    if (!resolved.startsWith(dataDir)) {
+      throw new Error('预览路径不在数据目录内')
+    }
+    const ext = path.extname(storedPath).toLowerCase()
+    const buf = fs.readFileSync(storedPath)
+    if (['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'].includes(ext)) {
+      const mime =
+        ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : ext === '.webp' ? 'image/webp' : 'image/jpeg'
+      return { kind: 'image', name, dataUrl: `data:${mime};base64,${buf.toString('base64')}` }
+    }
+    if (ext === '.pdf') {
+      return { kind: 'pdf', name, dataUrl: `data:application/pdf;base64,${buf.toString('base64')}` }
+    }
+    if (['.txt', '.md', '.csv', '.json', '.xml', '.log'].includes(ext) && buf.length < 200_000) {
+      return { kind: 'text', name, text: buf.toString('utf8') }
+    }
+    return { kind: 'other', name }
+  }
+
+  private uploadsFor(projectId: string, itemCode: string): UploadRecord[] {
+    return this.store.all<UploadRow>(
+      'SELECT * FROM uploads WHERE project_id=? AND item_code=? ORDER BY created_at ASC',
+      [projectId, itemCode]
+    )
+  }
+
+  private refreshFingerprint(projectId: string, itemCode: string, opts?: { bumpDraft?: boolean }): void {
+    const current = this.getInstance(projectId, itemCode)
+    const uploads = this.uploadsFor(projectId, itemCode)
+    const fingerprint = computeContentFingerprint({
+      document: editorDocumentFromPayload(current.payload),
+      uploads
+    })
+    const printReset = fingerprint !== current.lastPrintedFingerprint
+    this.store.exec(
+      `UPDATE catalog_instances SET content_fingerprint=?,
+       print_status=CASE WHEN ? = 1 THEN 'unprinted' ELSE print_status END,
+       status=CASE WHEN ? = 1 AND status='empty' THEN 'draft' ELSE status END,
+       updated_at=? WHERE project_id=? AND item_code=?`,
+      [fingerprint, printReset ? 1 : 0, opts?.bumpDraft ? 1 : 0, nowISO(), projectId, itemCode]
+    )
+  }
+
   private ensureInstance(projectId: string, itemCode: string): void {
     const project = this.getProject(projectId)
     const item = getCatalogItem(itemCode)
@@ -540,8 +763,8 @@ export class Studio {
     )
     if (!existing) {
       this.store.exec(
-        `INSERT INTO catalog_instances (id, project_id, item_code, status, payload, generated_path, notes, updated_at)
-         VALUES (?, ?, ?, 'empty', '{}', NULL, '', ?)`,
+        `INSERT INTO catalog_instances (id, project_id, item_code, status, payload, generated_path, notes, updated_at, print_status, content_fingerprint, last_printed_at, last_printed_fingerprint)
+         VALUES (?, ?, ?, 'empty', '{}', NULL, '', ?, 'unprinted', '', NULL, '')`,
         [randomUUID(), projectId, itemCode, nowISO()]
       )
     }
