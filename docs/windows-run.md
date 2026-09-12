@@ -2,7 +2,7 @@
 
 本文面向**不熟命令行的 Windows 用户**。按编号做即可：先拿到代码，再装好 Node，最后在项目根目录跑三条命令。
 
-**请用「命令提示符」粘贴本文命令**（按 `Win` 键搜索「命令提示符」或 `cmd`）。Windows 11 默认的 PowerShell 也能用，但个别命令写法不同，文中已单独标出。
+**命令提示符和 PowerShell 不要混贴。** 编号步骤里的 `npm …` / `node -v` 两种终端都能用。但 `set`、`rmdir /s /q`、`cd /d` 是 **cmd** 写法，粘进 PowerShell 会失败或没有效果。仓库根目录已有 `.npmrc`（`electron_mirror=https://npmmirror.com/mirrors/electron/`），一般不必再手设镜像。缺 `electron.exe` 时请只用 [4.1 的 PowerShell 一段](#41-electron-窗口起不来)。
 
 仓库：<https://github.com/yydd-gif/ipw>（默认分支 **main**）  
 产品：验收到手（acceptance-studio）  
@@ -269,10 +269,36 @@ npm run dev
 ### 4.1 Electron 窗口起不来
 
 - 先确认 `npm run verify:m1` 已经成功。核心链路没过，先不要纠结窗口。
-- 看终端有没有红色报错。常见是 Electron 二进制没下完：再执行一次 `npm install`。
 - 公司杀毒软件可能拦截 `node_modules\electron` 里的 `electron.exe`。把项目目录加入杀软「排除项」，或临时允许后再试 `npm run dev`。
 - 确认是在**有桌面的 Windows** 上运行（不是纯 SSH / 无界面服务器）。
 - 关掉旧的 `npm run dev` 窗口，重新开一个终端，按第 2、3 节再走一遍（便携 Node 要重新设 PATH）。
+
+若报 **`Error: Electron uninstall`**，或 `node_modules\electron\dist\electron.exe` 不存在，而 `npm install electron` 却显示 **up to date**：说明 npm 包在，但二进制没下下来（国内访问 GitHub Releases 常失败）。仓库 `.npmrc` 已钉镜像；对已经装残的 `node_modules\electron` 仍要删掉再强制重装。
+
+在 **PowerShell**（不要用「命令提示符」）进入项目根目录后，整段复制执行：
+
+```powershell
+$env:ELECTRON_MIRROR = 'https://npmmirror.com/mirrors/electron/'
+Remove-Item -Recurse -Force .\node_modules\electron -ErrorAction SilentlyContinue
+npm install electron --save-dev --force
+Get-ChildItem .\node_modules\electron\dist\electron.exe
+npm run dev
+```
+
+`$env:ELECTRON_MIRROR` 与 `.npmrc` 作用相同，可作双保险。`Get-ChildItem` 必须列出 `electron.exe`；若仍报找不到文件，把杀软排除项目目录后再跑一遍，或执行：
+
+```powershell
+.\scripts\ensure-electron.ps1
+npm run dev
+```
+
+**不要把 cmd 命令粘进 PowerShell：**
+
+| cmd（不要粘） | PowerShell |
+| --- | --- |
+| `set ELECTRON_MIRROR=...` | `$env:ELECTRON_MIRROR = '...'` |
+| `rmdir /s /q node_modules\electron` | `Remove-Item -Recurse -Force .\node_modules\electron` |
+| `cd /d D:\path\to\ipw` | `Set-Location D:\path\to\ipw` |
 
 ### 4.2 「npm 不是内部或外部命令」
 
@@ -372,5 +398,15 @@ node -v
 npm -v
 npm install
 npm run verify:m1
+npm run dev
+```
+
+缺 `electron.exe` 时（**只在 PowerShell**）：
+
+```powershell
+$env:ELECTRON_MIRROR = 'https://npmmirror.com/mirrors/electron/'
+Remove-Item -Recurse -Force .\node_modules\electron -ErrorAction SilentlyContinue
+npm install electron --save-dev --force
+Get-ChildItem .\node_modules\electron\dist\electron.exe
 npm run dev
 ```
