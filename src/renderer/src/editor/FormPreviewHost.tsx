@@ -14,7 +14,9 @@ export default function FormPreviewHost(props: {
 }) {
   return (
     <div className="form-preview-host">
-      <div className="mode-banner">{FORM_MODE_BANNER}</div>
+      <div className="mode-banner" data-banner="not-embedded" data-kernel="form-preview">
+        {FORM_MODE_BANNER}
+      </div>
       {props.editor.pane === 'form' ? (
         <>
           <FormPane editor={props.editor} draft={props.draft} onChange={props.onDraft} />

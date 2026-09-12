@@ -1,8 +1,8 @@
 # 验收到手（Acceptance Studio）v1 · 备胎线
 
-Electron 桌面应用：工程 / 政务信息化 / 混合项目的**验收资料编辑**。本版按 ADR-5 走 **备胎线**——上表单写入 `project.json`，离线 Python `fill_engine` 填充 `{{key}}`，下侧只读预览。**不是** OnlyOffice WYSIWYG。
+Electron 桌面应用：工程 / 政务信息化 / 混合项目的**验收资料编辑**。本版按 ADR-5 走 **备胎线**——上表单写入 `project.json`，离线 Python `fill_engine` 填充 `{{key}}`，下侧只读预览。**本版不宣称所见即所得，不是内嵌编辑。**
 
-右栏黄条固定文案：`当前为表单模式（编辑内核未就绪）`。`EditorHost` 预留 `FormPreviewHost` / `OnlyOfficeHost` 交换位。
+右栏黄条固定文案：`不是内嵌编辑 · 表单模式（编辑内核未就绪）`。`EditorHost` 预留 `FormPreviewHost` / `OnlyOfficeHost` 交换位（本 PR 不嵌入）。
 
 ## 本版能做什么
 
@@ -63,7 +63,7 @@ electron_mirror=https://npmmirror.com/mirrors/electron/
 
 ## 明确延期（不挡 v1）
 
-- OnlyOffice / 真 WYSIWYG 嵌入
+- OnlyOffice 真内嵌（所见即所得）
 - 官方 37 套模板包导入
 - Windows 便携 Python 随包装发
 - dsh AI（智能填写 / 校核）

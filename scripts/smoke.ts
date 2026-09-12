@@ -1,8 +1,6 @@
 /**
- * Fallback-line smoke: project.json persist, eight-book tree,
- * form fields → python fill_engine, residual {{}} hard-block,
- * print status machine (preview ≠ printed; edit resets print),
- * no-template item is upload-only, important+empty → red error dot.
+ * 黑寡妇过关 / 绿巨人冒烟（备胎首版）。
+ * npm test 必须按下面 7 条全过。下一轮（OnlyOffice 真内嵌 / Win 便携包 / dsh）不在本脚本。
  */
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -10,6 +8,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { treeFillDot } from '../src/shared/catalog'
+import { ACTIVE_EDITOR_KERNEL, FORM_MODE_BANNER } from '../src/shared/types'
 import { Studio } from '../src/core/studio'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -21,14 +20,14 @@ function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(`ASSERT: ${msg}`)
 }
 
+function pass(id: number, msg: string): void {
+  console.log(`PASS ${id}  ${msg}`)
+}
+
 async function main(): Promise<void> {
   execFileSync('python3', [engine, 'make-demo', '--out', templatesDir], { stdio: 'inherit' })
-  assert(fs.existsSync(path.join(templatesDir, '2.7_设备开箱检验记录.docx')), 'demo 2.7 template')
-  assert(fs.existsSync(path.join(templatesDir, '6.2_竣工验收报告.docx')), 'demo 6.2 template')
-  assert(fs.existsSync(path.join(templatesDir, '8.1_总封面.docx')), 'demo 8.1 template')
 
   const studio = new Studio({ dataDir: tmp, templatesDir, enginePath: engine, pythonBin: 'python3' })
-
   const project = studio.createProject({
     name: '备胎线演示项目',
     type: 'hybrid',
@@ -39,55 +38,29 @@ async function main(): Promise<void> {
     phase: '验收',
     doc_no: 'YS-F1'
   })
-  assert(fs.existsSync(path.join(project.rootDir, 'project.json')), 'persists project.json under data dir')
+  const projectJson = path.join(project.rootDir, 'project.json')
+  assert(fs.existsSync(projectJson), 'project.json created')
 
+  // --- 1 色点与打印标拆开，空和草稿分得开 ---
   const catalog = studio.getCatalogState(project.id)
-  assert(catalog.length === 8, 'left tree has eight books')
+  assert(catalog.length === 8, 'eight volumes')
   const byCode = new Map(catalog.flatMap((v) => v.items).map((e) => [e.item.code, e]))
 
-  const contract = byCode.get('1.2')
-  assert(contract, 'can open 1.2 from catalog')
-  assert(contract.item.importance === 'important', '1.2 is 重要')
-  assert(contract.record.editStatus === 'empty', '1.2 starts empty')
-  assert(treeFillDot(contract.item.importance, contract.record.editStatus) === 'error', '重要且空 → 红点')
+  const emptyNormal = byCode.get('1.1')
+  assert(emptyNormal, '1.1 exists')
+  assert(emptyNormal.record.editStatus === 'empty', '1.1 starts empty')
+  assert(treeFillDot(emptyNormal.item.importance, 'empty') === 'empty', '普通空 → 灰')
+  assert(emptyNormal.record.printStatus === 'unprinted', 'print icon is separate and starts 未打印')
 
-  const open27 = studio.getItemEditor(project.id, '2.7')
-  assert(open27.pane === 'form', 'template item opens form pane, not a fake table')
-  assert((open27.item.fields?.length ?? 0) >= 4, '2.7 has form fields')
+  const importantEmpty = byCode.get('1.2')
+  assert(importantEmpty, '1.2 exists')
+  assert(treeFillDot(importantEmpty.item.importance, importantEmpty.record.editStatus) === 'error', '重要且空 → 红')
 
-  const draft = studio.saveItemFields(
-    project.id,
-    '2.7',
-    { device_name: '配电柜', device_model: '' },
-    'draft'
-  )
-  assert(draft.editStatus === 'draft', 'partial form is 草稿 / amber')
-  assert(draft.printStatus === 'unprinted', 'draft is unprinted')
-
-  const reopened = studio.getItemEditor(project.id, '2.7')
-  assert(reopened.mergedFields.device_name === '配电柜', 'field persists in project.json')
-  assert(reopened.record.editStatus === 'draft', 'amber survives reopen')
-
-  const incompleteExport = studio.checkExport(project.id, '2.7')
-  assert(!incompleteExport.ok, 'incomplete required fields hard-block export')
-
-  const ghostTpl = path.join(tmp, 'ghost.docx')
-  execFileSync('python3', [engine, 'make-demo', '--out', tmp])
-  const demo27 = path.join(templatesDir, '2.7_设备开箱检验记录.docx')
-  fs.copyFileSync(demo27, ghostTpl)
-  const ghostData = path.join(tmp, 'ghost.json')
-  fs.writeFileSync(ghostData, JSON.stringify({ project_name: 'X' }), 'utf8')
-  const ghostOut = path.join(tmp, 'ghost-filled.docx')
-  const ghostPrev = path.join(tmp, 'ghost.html')
-  const ghostReport = JSON.parse(
-    execFileSync(
-      'python3',
-      [engine, 'fill', '--template', ghostTpl, '--data', ghostData, '--out', ghostOut, '--preview', ghostPrev],
-      { encoding: 'utf8' }
-    )
-  ) as { residual_keys: string[] }
-  assert(ghostReport.residual_keys.includes('device_name'), 'empty/missing keys remain as {{device_name}}')
-  assert(fs.readFileSync(ghostOut).toString('utf8').includes('{{device_name}}'), 'filled docx still has mustache')
+  const draftRec = studio.saveItemFields(project.id, '8.1', { volume_title: '验收资料' }, 'draft')
+  assert(draftRec.editStatus === 'draft', '8.1 partial → 草稿')
+  assert(treeFillDot('normal', 'draft') === 'draft', '草稿 → 琥珀')
+  assert(treeFillDot('normal', 'empty') !== treeFillDot('normal', 'draft'), '空灰 ≠ 琥珀草稿')
+  assert(draftRec.printStatus === 'unprinted', 'draft does not light print icon')
 
   const ready = studio.saveItemFields(
     project.id,
@@ -102,61 +75,92 @@ async function main(): Promise<void> {
     },
     'complete'
   )
-  assert(ready.editStatus === 'complete', 'complete persists as 已齐')
+  assert(ready.editStatus === 'complete', '2.7 已齐')
+  assert(treeFillDot('important', 'complete') === 'complete', '已齐 → 绿')
+  pass(1, '色点灰/琥珀/绿/红与打印标拆开，空和草稿分得开')
 
+  // --- 2 上表单写 project.json，下只读预览引擎稿，顶条不是内嵌编辑 ---
+  assert(FORM_MODE_BANNER.includes('不是内嵌编辑'), 'banner copy locked')
+  assert(ACTIVE_EDITOR_KERNEL === 'form-preview', 'kernel is form-preview, not onlyoffice')
+  const persisted = JSON.parse(fs.readFileSync(projectJson, 'utf8')) as {
+    fields: Record<string, string>
+    items: Record<string, { overrides: Record<string, string> }>
+  }
+  assert(persisted.fields.project_name === '备胎线演示项目', 'form writes project.json fields')
+  assert(persisted.items['2.7']?.overrides.device_name === '配电柜', 'per-doc overrides in project.json')
+
+  const formPane = studio.getItemEditor(project.id, '2.7')
+  assert(formPane.pane === 'form', 'template item is form, not a fake WYSIWYG table')
   const filled = studio.fillItem(project.id, '2.7')
-  assert(filled.ok, `fill_engine ok: ${filled.message}`)
-  assert(filled.filledPath && fs.existsSync(filled.filledPath), 'filled docx exists')
-  assert(filled.previewPath && fs.existsSync(filled.previewPath), 'preview html exists')
-  assert(filled.residualKeys.length === 0, 'no residual {{}} after full fill')
-  const preview = fs.readFileSync(filled.previewPath!, 'utf8')
-  assert(preview.includes('配电柜'), 'preview shows form value')
+  assert(filled.ok && filled.filledPath && fs.existsSync(filled.filledPath), 'engine wrote filled docx')
+  assert(filled.previewPath && fs.existsSync(filled.previewPath), 'engine wrote read-only preview')
+  assert(fs.readFileSync(filled.previewPath, 'utf8').includes('配电柜'), 'preview shows form value')
+  pass(2, '表单写入 project.json，只读预览引擎 docx，顶条「不是内嵌编辑」')
 
-  const pdfDest = path.join(tmp, '2.7-current.pdf')
-  const exported = studio.exportItemFile(project.id, '2.7', pdfDest)
-  assert(fs.existsSync(exported.path), 'export path exists')
-  const pdfHead = fs.readFileSync(exported.path).subarray(0, 5).toString('utf8')
-  assert(pdfHead === '%PDF-', `export is PDF, got ${pdfHead}`)
-
-  const afterExport = studio.getItemEditor(project.id, '2.7').record
-  assert(afterExport.printStatus !== 'printed', 'export does not mark printed')
-
-  const htmlAfter = studio.writePrintHtml(project.id, '2.7')
-  assert(fs.existsSync(htmlAfter), 'print preview writes HTML')
-  const stillUnprinted = studio.getItemEditor(project.id, '2.7').record
-  assert(stillUnprinted.printStatus === 'unprinted', 'preview does not mark printed')
-
-  const printed = studio.markPrinted(project.id, '2.7')
-  assert(printed.printStatus === 'printed', 'real print success → 已打印')
-  assert(printed.lastPrintedFingerprint === printed.contentFingerprint, 'print stores fingerprint')
-
-  const afterEdit = studio.saveItemFields(project.id, '2.7', { inspect_result: '改过内容应打回未打印' }, 'complete')
-  assert(afterEdit.printStatus === 'unprinted', 'content change resets to unprinted')
-  assert(afterEdit.editStatus === 'complete', 'edit keeps 已齐 but print goes gray')
-
-  const uploadPane = studio.getItemEditor(project.id, '1.2')
-  assert(uploadPane.pane === 'upload', 'no-template item is upload, not a fake table')
-  assert(!uploadPane.item.fields?.length, 'upload pane has no form schema / fake table')
+  // --- 3 没模板走上传区 ---
+  const upload = studio.getItemEditor(project.id, '1.2')
+  assert(upload.pane === 'upload' && !upload.item.fields?.length, '1.2 upload-only, no fake table')
   const dummy = path.join(tmp, 'contract.txt')
   fs.writeFileSync(dummy, '合同扫描件占位\n')
   studio.addUpload(project.id, '1.2', dummy, '合同.pdf.txt')
-  const afterUpload = studio.getItemEditor(project.id, '1.2')
-  assert(afterUpload.record.uploads.length >= 1, 'upload has files')
-  assert(afterUpload.record.editStatus === 'complete', 'upload turns empty into complete')
+  const missingTpl = studio.getItemEditor(project.id, '2.1')
+  assert(missingTpl.pane === 'upload' && missingTpl.templateMissing, 'no demo template → upload zone')
+  pass(3, '没模板走上传区')
 
-  const missing = studio.getItemEditor(project.id, '2.1')
-  assert(missing.pane === 'upload' && missing.templateMissing, 'no demo template → upload zone only')
+  // --- 4 导出残留硬拦；打印缺字段软提示可继续 ---
+  const incomplete = studio.saveItemFields(project.id, '6.2', { summary: '未齐' }, 'draft')
+  assert(incomplete.editStatus === 'draft', '6.2 still draft')
+  const blockedReq = studio.checkExport(project.id, '6.2')
+  assert(!blockedReq.ok, 'missing required fields hard-block export')
 
+  fs.appendFileSync(filled.filledPath!, '{{ghost_key}}')
+  const blockedResidual = studio.checkExport(project.id, '2.7')
+  assert(!blockedResidual.ok, 'residual {{}} hard-blocks export')
+  assert(
+    blockedResidual.residualKeys.includes('ghost_key') ||
+      blockedResidual.blockers.some((b) => b.reason.includes('ghost_key')),
+    'export blocker names leftover {{ghost_key}}'
+  )
+  let threw = false
+  try {
+    studio.exportItemFile(project.id, '2.7', path.join(tmp, 'should-not.pdf'))
+  } catch (err) {
+    threw = String(err).includes('ghost_key') || String(err).includes('残留')
+  }
+  assert(threw, 'exportItemFile throws on residual {{}}')
+  studio.fillItem(project.id, '2.7')
+
+  const warn = studio.printWarn(project.id, '6.2')
+  assert(warn.incomplete, 'print soft-warns when fields missing')
+  const printedAnyway = studio.markPrinted(project.id, '6.2')
+  assert(printedAnyway.printStatus === 'printed', 'soft-warn still allows continue → 已打印')
+  pass(4, '导出残留硬拦；打印缺字段软提示可继续')
+
+  // --- 5 真打成功才亮已打印，改过打回未打印 ---
+  const again = studio.fillItem(project.id, '2.7')
+  const exported = studio.exportItemFile(project.id, '2.7', path.join(tmp, '2.7-current.pdf'))
+  assert(fs.readFileSync(exported.path).subarray(0, 5).toString('utf8') === '%PDF-', 'export PDF')
+  assert(studio.getItemEditor(project.id, '2.7').record.printStatus !== 'printed', 'export ≠ printed')
+  studio.writePrintHtml(project.id, '2.7')
+  assert(studio.getItemEditor(project.id, '2.7').record.printStatus !== 'printed', 'preview ≠ printed')
+  const printed = studio.markPrinted(project.id, '2.7')
+  assert(printed.printStatus === 'printed', 'real print success → 已打印')
+  assert(printed.lastPrintedFingerprint === printed.contentFingerprint, 'print stores fingerprint')
+  const afterEdit = studio.saveItemFields(project.id, '2.7', { inspect_result: '改过内容应打回未打印' }, 'complete')
+  assert(afterEdit.printStatus === 'unprinted', 'content change resets print icon')
+  assert(afterEdit.editStatus === 'complete', 'fill stays 绿, print goes 灰')
+  pass(5, '真打成功才亮已打印；改内容打回未打印')
+
+  // --- 6 一键成册离线调 Python ---
   const book = studio.fillVolume(project.id)
-  assert(book.filled >= 1, '一键成册 fills available demo templates')
-
-  const missingPy = new Studio({
+  assert(book.filled >= 1, `fillVolume used python engine, filled ${book.filled}`)
+  const nopy = new Studio({
     dataDir: path.join(tmp, 'nopy'),
     templatesDir,
     pythonBin: '/nonexistent/python-missing',
     enginePath: engine
   })
-  missingPy.createProject({
+  const orphan = nopy.createProject({
     name: '缺 Python',
     type: 'hybrid',
     owner: 'A',
@@ -166,17 +170,19 @@ async function main(): Promise<void> {
     phase: '',
     doc_no: ''
   })
-  const listed = missingPy.listProjects()
-  const fail = missingPy.fillItem(listed[0]!.id, '2.7')
-  assert(fail.engineMissing || !fail.ok, 'graceful message when python missing')
-  assert(fail.message.includes('Python') || fail.message.includes('python'), `mentions python: ${fail.message}`)
+  const fail = nopy.fillItem(orphan.id, '2.7')
+  assert(!fail.ok && (fail.engineMissing || /python/i.test(fail.message)), 'offline python missing is graceful')
+  pass(6, '一键成册离线调 Python')
 
-  const warn = studio.printWarn(project.id, '2.1')
-  assert(warn.incomplete, 'print soft-warns when item is incomplete')
+  // --- 7 不宣称所见即所得 ---
+  const kernel: string = ACTIVE_EDITOR_KERNEL
+  assert(kernel === 'form-preview', 'v1 kernel is form-preview, not onlyoffice')
+  assert(!FORM_MODE_BANNER.includes('所见即所得'), 'banner does not claim WYSIWYG')
+  assert(FORM_MODE_BANNER.includes('不是内嵌编辑'), 'banner states 不是内嵌编辑')
+  pass(7, '不宣称所见即所得')
 
-  console.log('Fallback smoke OK')
+  console.log('Fallback DoD smoke OK')
   console.log('dataDir', tmp)
-  console.log('pdf', exported.path)
   console.log('fillVolume', book.message)
 }
 

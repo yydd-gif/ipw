@@ -4,7 +4,7 @@ export default function PreviewPane(props: { editor: ItemEditorState; previewHtm
   const residual = props.editor.record.residualKeys
   return (
     <div className="preview-pane">
-      <div className="preview-head">只读预览 · 填充结果（预览不等于已打印）</div>
+      <div className="preview-head">只读预览 · 引擎产出（不是内嵌编辑；预览不等于已打印）</div>
       {props.editor.record.fillError ? (
         <div className="notice">{props.editor.record.fillError}</div>
       ) : null}

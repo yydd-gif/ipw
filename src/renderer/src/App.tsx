@@ -93,7 +93,7 @@ export default function App() {
         <div className="side-foot">
           八册目录 · 离线 fill_engine
           <br />
-          OnlyOffice 内核未就绪
+          不是内嵌编辑 · 内核未就绪
         </div>
       </aside>
       <div className="workspace">
@@ -106,7 +106,7 @@ export default function App() {
                 : '先新建或打开项目，再进入八册目录编辑'}
             </div>
           </div>
-          <div className="muted">{busy ? '处理中…' : 'v1 · 表单模式'}</div>
+          <div className="muted">{busy ? '处理中…' : 'v1 · 不是内嵌编辑'}</div>
         </header>
         <main className={view === 'editor' ? 'content content-flush' : 'content'}>
           {view === 'manager' && (

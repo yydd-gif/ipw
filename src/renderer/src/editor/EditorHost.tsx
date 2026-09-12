@@ -5,7 +5,7 @@ import OnlyOfficeHost from './OnlyOfficeHost'
 /**
  * EditorHost is the only UI seam for swapping the document kernel.
  * v1: FormPreviewHost (form fill + read-only preview).
- * Later: OnlyOfficeHost (WYSIWYG). Catalog / fill_engine / print stay outside.
+ * Later: OnlyOfficeHost. v1 不宣称所见即所得。Catalog / fill_engine / print stay outside.
  */
 export default function EditorHost(props: {
   editor: ItemEditorState

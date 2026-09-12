@@ -191,4 +191,5 @@ export interface FilePreview {
   name: string
 }
 
-export const FORM_MODE_BANNER = '当前为表单模式（编辑内核未就绪）'
+/** Locked copy: 备胎首版过关 — 顶条必须写明「不是内嵌编辑」. Do not claim WYSIWYG. */
+export const FORM_MODE_BANNER = '不是内嵌编辑 · 表单模式（编辑内核未就绪）'
