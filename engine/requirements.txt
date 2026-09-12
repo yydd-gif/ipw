@@ -1,0 +1,4 @@
+# Optional. fill_engine.py runs on Python 3 stdlib (zipfile + xml).
+# Official engine / 37-template pack will pin the real stack in a later PR.
+# lxml>=4.9.0
+# python-docx>=1.1.0
