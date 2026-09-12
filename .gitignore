@@ -1,0 +1,14 @@
+node_modules/
+out/
+dist/
+release/
+.DS_Store
+*.log
+.idea/
+.vscode/
+*.tsbuildinfo
+*.local
+.acceptance-studio-test/
+__pycache__/
+*.pyc
+.python-version

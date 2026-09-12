@@ -1,0 +1,33 @@
+{
+  "name": "acceptance-studio",
+  "productName": "验收到手",
+  "version": "0.2.0",
+  "description": "验收到手 v1：Electron 验收资料编辑（备胎线：表单填报 + 只读预览）",
+  "main": "./out/main/index.js",
+  "author": "验收到手",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "generate:templates": "python3 engine/fill_engine.py make-demo --out templates",
+    "smoke": "tsx scripts/smoke.ts",
+    "test": "npm run smoke",
+    "postinstall": "python3 engine/fill_engine.py make-demo --out templates",
+    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.3.1",
+    "electron-vite": "^2.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.14"
+  }
+}
