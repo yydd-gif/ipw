@@ -5,7 +5,10 @@ export default function FormPane(props: {
   draft: Record<string, string>
   onChange: (next: Record<string, string>) => void
 }) {
-  const fields = props.editor.item.fields ?? []
+  const fields = [...(props.editor.item.fields ?? [])].sort((a, b) => {
+    if (a.scope === b.scope) return 0
+    return a.scope === 'item' ? -1 : 1
+  })
   const set = (key: string, value: string) => props.onChange({ ...props.draft, [key]: value })
 
   return (
