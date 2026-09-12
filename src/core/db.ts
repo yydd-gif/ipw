@@ -62,6 +62,10 @@ CREATE TABLE IF NOT EXISTS catalog_instances (
   generated_path TEXT,
   notes TEXT DEFAULT '',
   updated_at TEXT NOT NULL,
+  print_status TEXT NOT NULL DEFAULT 'unprinted',
+  content_fingerprint TEXT DEFAULT '',
+  last_printed_at TEXT,
+  last_printed_fingerprint TEXT DEFAULT '',
   UNIQUE(project_id, item_code)
 );
 
@@ -93,7 +97,21 @@ export class SqliteStore {
       this.db = new Sql.Database()
     }
     this.db.run(SCHEMA)
+    this.migrate()
     this.persist()
+  }
+
+  private migrate(): void {
+    this.ensureColumn('catalog_instances', 'print_status', "TEXT NOT NULL DEFAULT 'unprinted'")
+    this.ensureColumn('catalog_instances', 'content_fingerprint', "TEXT DEFAULT ''")
+    this.ensureColumn('catalog_instances', 'last_printed_at', 'TEXT')
+    this.ensureColumn('catalog_instances', 'last_printed_fingerprint', "TEXT DEFAULT ''")
+  }
+
+  private ensureColumn(table: string, column: string, spec: string): void {
+    const cols = this.all<{ name: string }>(`PRAGMA table_info(${table})`)
+    if (cols.some((c) => c.name === column)) return
+    this.db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${spec}`)
   }
 
   persist(): void {

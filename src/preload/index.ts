@@ -26,7 +26,20 @@ const api: StudioAPI = {
   confirmReady: (projectId) => ipcRenderer.invoke('studio:confirmReady', projectId),
   exportZip: (projectId) => ipcRenderer.invoke('studio:exportZip', projectId),
   openPath: (filePath) => ipcRenderer.invoke('studio:openPath', filePath),
-  revealInFolder: (filePath) => ipcRenderer.invoke('studio:revealInFolder', filePath)
+  revealInFolder: (filePath) => ipcRenderer.invoke('studio:revealInFolder', filePath),
+  getEditorDocument: (projectId, itemCode) =>
+    ipcRenderer.invoke('studio:getEditorDocument', projectId, itemCode),
+  saveEditorDocument: (projectId, itemCode, document, as) =>
+    ipcRenderer.invoke('studio:saveEditorDocument', projectId, itemCode, document, as),
+  markItemPrinted: (projectId, itemCode, fingerprint) =>
+    ipcRenderer.invoke('studio:markItemPrinted', projectId, itemCode, fingerprint),
+  exportItemPdf: (projectId, itemCode, document) =>
+    ipcRenderer.invoke('studio:exportItemPdf', projectId, itemCode, document),
+  printPreview: (projectId, itemCode, document) =>
+    ipcRenderer.invoke('studio:printPreview', projectId, itemCode, document),
+  printItem: (projectId, itemCode, document) =>
+    ipcRenderer.invoke('studio:printItem', projectId, itemCode, document),
+  previewUpload: (storedPath) => ipcRenderer.invoke('studio:previewUpload', storedPath)
 }
 
 contextBridge.exposeInMainWorld('studio', api)

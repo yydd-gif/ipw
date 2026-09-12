@@ -10,12 +10,12 @@ import type {
 import { PROJECT_TYPE_LABELS } from '@shared/types'
 import Sidebar, { type ViewId } from './components/Sidebar'
 import ProjectView from './views/ProjectView'
-import CatalogView from './views/CatalogView'
 import LogsView from './views/LogsView'
 import ExportView from './views/ExportView'
+import EditorShell from './editor/EditorShell'
 
 export default function App() {
-  const [view, setView] = useState<ViewId>('projects')
+  const [view, setView] = useState<ViewId>('editor')
   const [projects, setProjects] = useState<Project[]>([])
   const [currentId, setCurrentId] = useState<string | null>(null)
   const [logs, setLogs] = useState<DailyLog[]>([])
@@ -84,7 +84,7 @@ export default function App() {
     if (created) {
       await refreshProjects()
       setCurrentId(created.id)
-      setView('catalog')
+      setView('editor')
     }
   }
 
@@ -97,7 +97,7 @@ export default function App() {
 
   const selectProject = (id: string) => {
     setCurrentId(id)
-    setView('catalog')
+    setView('editor')
   }
 
   return (
@@ -120,12 +120,33 @@ export default function App() {
             <div className="muted">
               {current
                 ? `合同 ${current.contract_no || '未填'} · ${current.owner || '建设单位未填'}`
-                : '先新建或打开一个项目，再填写目录与施工日志'}
+                : '先新建或打开一个项目，再在左侧目录中编辑条目'}
             </div>
           </div>
-          <div className="muted">{busy ? '处理中…' : '本地组卷 · M1'}</div>
+          <div className="muted">{busy ? '处理中…' : '试用 · 目录编辑 / 当前项打印'}</div>
         </header>
-        <main className="content">
+        <main className={view === 'editor' ? 'content content-flush' : 'content'}>
+          {view === 'editor' && current && (
+            <EditorShell
+              project={current}
+              catalog={catalog}
+              onRefresh={async () => {
+                await refreshProjectData(current.id)
+              }}
+              notify={notify}
+            />
+          )}
+          {view === 'editor' && !current && (
+            <div className="card">
+              <h3 className="sec">开始验收资料编辑</h3>
+              <p className="muted">还没有打开的项目。请到「项目」页新建或选择一个项目，应用会进入八册目录编辑器。</p>
+              <div className="actions">
+                <button className="btn primary" onClick={() => setView('projects')}>
+                  前往项目
+                </button>
+              </div>
+            </div>
+          )}
           {view === 'projects' && (
             <ProjectView
               projects={projects}
@@ -134,16 +155,6 @@ export default function App() {
               onCreate={createProject}
               current={current}
               onSave={updateProject}
-            />
-          )}
-          {view === 'catalog' && current && (
-            <CatalogView
-              project={current}
-              catalog={catalog}
-              onRefresh={async () => {
-                await refreshProjectData(current.id)
-              }}
-              notify={notify}
             />
           )}
           {view === 'logs' && current && (

@@ -1,13 +1,19 @@
 import type {
   DailyLog,
   DailyLogInput,
+  EditorDocumentState,
   ExportCheck,
+  FilePreview,
   GenerateResult,
   ItemStatus,
+  PdfExportResult,
+  PrintResult,
   Project,
   ProjectInput,
+  TableDocument,
   UploadRecord,
   WeeklyReportOptions,
+  CatalogInstance,
   CatalogVolumeState
 } from './types'
 
@@ -51,4 +57,24 @@ export interface StudioAPI {
   exportZip: (projectId: string) => Promise<{ path: string; check: ExportCheck } | null>
   openPath: (filePath: string) => Promise<void>
   revealInFolder: (filePath: string) => Promise<void>
+  getEditorDocument: (projectId: string, itemCode: string) => Promise<EditorDocumentState>
+  saveEditorDocument: (
+    projectId: string,
+    itemCode: string,
+    document: TableDocument,
+    as?: 'draft' | 'ready'
+  ) => Promise<CatalogInstance>
+  markItemPrinted: (projectId: string, itemCode: string, fingerprint?: string) => Promise<CatalogInstance>
+  exportItemPdf: (
+    projectId: string,
+    itemCode: string,
+    document?: TableDocument | null
+  ) => Promise<PdfExportResult | null>
+  printPreview: (projectId: string, itemCode: string, document?: TableDocument | null) => Promise<void>
+  printItem: (
+    projectId: string,
+    itemCode: string,
+    document?: TableDocument | null
+  ) => Promise<PrintResult>
+  previewUpload: (storedPath: string) => Promise<FilePreview>
 }

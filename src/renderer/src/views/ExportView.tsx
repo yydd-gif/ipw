@@ -19,7 +19,7 @@ export default function ExportView(props: {
       <section className="card">
         <h3 className="sec">导出验收资料包</h3>
         <p className="muted">
-          将按七卷目录生成 Zip，文件夹名包含条目编号。导出前必填条目必须为「已确认」或「免于提供」。
+          整包 Zip 为下一轮能力。试用版主路径是左侧目录编辑 + 当前条目「导出 PDF / 打印预览 / 打印」。
         </p>
         {check ? (
           <p>

@@ -1,9 +1,9 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { join } from 'node:path'
-import { existsSync } from 'node:fs'
+import { existsSync, writeFileSync } from 'node:fs'
 import { Studio } from '../core/studio'
 import { withExportSavePath } from '../shared/completeness'
-import type { DailyLogInput, ItemStatus, ProjectInput, WeeklyReportOptions } from '../shared/types'
+import type { DailyLogInput, ItemStatus, ProjectInput, TableDocument, WeeklyReportOptions } from '../shared/types'
 
 if (process.platform === 'linux') {
   app.disableHardwareAcceleration()
@@ -48,8 +48,8 @@ async function getStudio(): Promise<Studio> {
 
 function createWindow(): void {
   const win = new BrowserWindow({
-    width: 1320,
-    height: 860,
+    width: 1440,
+    height: 900,
     minWidth: 980,
     minHeight: 680,
     title: '验收到手',
@@ -197,3 +197,124 @@ ipcMain.handle('studio:openPath', async (_e, filePath: string) => {
 ipcMain.handle('studio:revealInFolder', async (_e, filePath: string) => {
   shell.showItemInFolder(filePath)
 })
+
+ipcMain.handle('studio:getEditorDocument', async (_e, projectId: string, itemCode: string) =>
+  (await getStudio()).getEditorDocument(projectId, itemCode)
+)
+
+ipcMain.handle(
+  'studio:saveEditorDocument',
+  async (_e, projectId: string, itemCode: string, document: TableDocument, as?: 'draft' | 'ready') =>
+    (await getStudio()).saveEditorDocument(projectId, itemCode, document, as)
+)
+
+ipcMain.handle(
+  'studio:markItemPrinted',
+  async (_e, projectId: string, itemCode: string, fingerprint?: string) =>
+    (await getStudio()).markItemPrinted(projectId, itemCode, fingerprint)
+)
+
+ipcMain.handle('studio:previewUpload', async (_e, storedPath: string) =>
+  (await getStudio()).previewUpload(storedPath)
+)
+
+ipcMain.handle(
+  'studio:exportItemPdf',
+  async (e, projectId: string, itemCode: string, document?: TableDocument | null) => {
+    const s = await getStudio()
+    if (document) s.saveEditorDocument(projectId, itemCode, document, 'draft')
+    const htmlPath = s.writeItemPrintHtml(projectId, itemCode, document)
+    const project = s.getProject(projectId)
+    const item = (await s.getEditorDocument(projectId, itemCode)).item
+    const win = BrowserWindow.fromWebContents(e.sender)
+    const pick = await dialog.showSaveDialog(win ?? undefined!, {
+      title: '导出当前条目 PDF',
+      defaultPath: `${item.code}_${item.title}_${project.name}.pdf`,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }]
+    })
+    if (pick.canceled || !pick.filePath) return null
+    try {
+      const pdf = await htmlToPdf(htmlPath)
+      s.writeItemPdfBytes(projectId, itemCode, pdf)
+      writeFileSync(pick.filePath, pdf)
+      return { path: pick.filePath, htmlPath }
+    } catch (err) {
+      console.warn('printToPDF failed, using simple PDF:', err)
+      return s.exportItemPdfFile(projectId, itemCode, pick.filePath, document)
+    }
+  }
+)
+
+ipcMain.handle(
+  'studio:printPreview',
+  async (_e, projectId: string, itemCode: string, document?: TableDocument | null) => {
+    const s = await getStudio()
+    // Preview must not save and must not mark printed.
+    const htmlPath = s.writeItemPrintHtml(projectId, itemCode, document)
+    const preview = new BrowserWindow({
+      width: 900,
+      height: 1100,
+      title: '打印预览',
+      backgroundColor: '#ffffff',
+      webPreferences: { sandbox: false }
+    })
+    previewWindows.add(preview)
+    preview.on('closed', () => previewWindows.delete(preview))
+    await preview.loadFile(htmlPath)
+    preview.show()
+  }
+)
+
+ipcMain.handle(
+  'studio:printItem',
+  async (e, projectId: string, itemCode: string, document?: TableDocument | null) => {
+    const s = await getStudio()
+    if (document) s.saveEditorDocument(projectId, itemCode, document, 'draft')
+    const instance = s.getEditorDocument(projectId, itemCode).instance
+    const htmlPath = s.writeItemPrintHtml(projectId, itemCode, document)
+    const owner = BrowserWindow.fromWebContents(e.sender)
+    const printWin = new BrowserWindow({
+      width: 800,
+      height: 1000,
+      show: false,
+      parent: owner ?? undefined,
+      webPreferences: { sandbox: false }
+    })
+    previewWindows.add(printWin)
+    await printWin.loadFile(htmlPath)
+    const printed = await new Promise<boolean>((resolve) => {
+      printWin.webContents.print({ printBackground: true }, (success) => {
+        resolve(Boolean(success))
+      })
+    })
+    previewWindows.delete(printWin)
+    if (!printWin.isDestroyed()) printWin.close()
+    if (printed) {
+      s.markItemPrinted(projectId, itemCode, instance.contentFingerprint)
+      return { printed: true }
+    }
+    return { printed: false, reason: 'cancelled' }
+  }
+)
+
+const previewWindows = new Set<BrowserWindow>()
+
+async function htmlToPdf(htmlPath: string): Promise<Buffer> {
+  const hidden = new BrowserWindow({
+    show: false,
+    width: 794,
+    height: 1123,
+    webPreferences: { sandbox: false }
+  })
+  try {
+    await hidden.loadFile(htmlPath)
+    const data = await hidden.webContents.printToPDF({
+      printBackground: true,
+      pageSize: 'A4',
+      margins: { marginType: 'default' }
+    })
+    return Buffer.from(data)
+  } finally {
+    if (!hidden.isDestroyed()) hidden.close()
+  }
+}
