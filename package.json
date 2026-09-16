@@ -1,9 +1,9 @@
 {
   "name": "yanshou-docs",
   "productName": "验收资料编辑软件",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
-  "description": "P5 Electron E1 shell — subtables + half-auto field sync (no genoffice)",
+  "description": "P6 Electron E1 shell — aggregate T7 + AI entries with offline gate (no genoffice)",
   "main": "src/main.js",
   "type": "commonjs",
   "scripts": {
@@ -11,7 +11,8 @@
     "start": "electron .",
     "p4:gate": "python3 tools/run_p4_gate.py",
     "p4:smoke": "python3 tools/run_p4_smoke.py",
-    "p5:smoke": "python3 tools/run_p5_regression.py"
+    "p5:smoke": "python3 tools/run_p5_regression.py",
+    "p6:smoke": "python3 tools/run_p6_regression.py"
   },
   "engines": {
     "node": ">=22.14"

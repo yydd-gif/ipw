@@ -19,6 +19,12 @@ contextBridge.exposeInMainWorld('api', {
   trashList: (dir) => ipcRenderer.invoke('trash-list', dir),
   showItem: (p) => ipcRenderer.invoke('show-item', p),
   revealRoot: (dir) => ipcRenderer.invoke('reveal-root', dir),
+  aiStatus: () => ipcRenderer.invoke('ai-status'),
+  aiExtract: (opts) => ipcRenderer.invoke('ai-extract', opts),
+  aiRewrite: (opts) => ipcRenderer.invoke('ai-rewrite', opts),
+  aiApply: (opts) => ipcRenderer.invoke('ai-apply', opts),
+  aiQa: (projectPath) => ipcRenderer.invoke('ai-qa', projectPath),
+  aggregate: (opts) => ipcRenderer.invoke('aggregate', opts),
   onProgress: (cb) => {
     const fn = (_e, line) => cb(line);
     ipcRenderer.on('engine-progress', fn);

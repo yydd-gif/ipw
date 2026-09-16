@@ -36,8 +36,11 @@ dsh --profile yanshou  （headless 后端，upstream 一行未改）
 | `yanshou_fill` | `fill_engine.py` | 按 FillPlan 填充；可复用 `planPath` |
 | `yanshou_numbering` | `numbering_engine.py` | 编号；删 02 不重排 03 |
 | `yanshou_verify` | `verify_engine.py` | 导出前校验闸门 |
-| `yanshou_aggregate` | `aggregate_engine.py` | 日志→周报/月报（P6 骨架；模型先归纳） |
+| `yanshou_aggregate` | `aggregate_engine.py` | 日志→周报/月报（P6：确定性 T7，不编造） |
 | `yanshou_subtable` | `subtable_engine.py` | 子表接管（P5：8 张行克隆） |
+| `yanshou_extract` | `ai_engine.py` | 智能填表抽取（source=rules，须确认） |
+| `yanshou_rewrite` | `ai_engine.py` | 起草/润色/扩写（无 Key 不伪造） |
+| `yanshou_qa` | `ai_engine.py` | 查错问答（先 verify） |
 
 ## 配置：双轨制
 
@@ -193,5 +196,5 @@ python tools/run_p3_smoke.py
 
 - **全局 `tools/pre-execute` 钩子未启用** —— 签名未确认，本阶段只靠工具内 `assertWritable()`。
 - **审批回调的 RPC 形状未确认** —— P4 壳实现方案 A；P3 CI 走 `DSH_PERMISSION_MODE` 后门。
-- **`yanshou_aggregate` 引擎仍是骨架** —— P6 才做日志→周报。`yanshou_subtable` 在 P5 已做行克隆。
+- **`yanshou_aggregate` P6 已落地** —— 施工日志 → 周报 → 月报走确定性规则，不编造。`yanshou_extract` / `yanshou_rewrite` / `yanshou_qa` 无 Key 时失败，不伪造模型回复。
 - **模型真调一轮需要 `DEEPSEEK_API_KEY`** —— 不写进仓库。无 Key 时不要假装跑过步骤 4。

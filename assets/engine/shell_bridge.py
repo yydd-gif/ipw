@@ -26,6 +26,7 @@ REPO = BASE.parent
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
+from lib.ai_gate import ai_status  # noqa: E402
 from lib.catalog_build import build_catalog_snapshot  # noqa: E402
 from lib.catalog_pages import apply_structure_to_docx  # noqa: E402
 from lib.docx_preview import preview_docx  # noqa: E402
@@ -252,6 +253,7 @@ def _open_payload(project_path: Path) -> dict:
         'schema': project.get('_schema'),
         'editorMode': 'E1',
         'syncCapable': True,
+        'ai': ai_status(probe_network=False),
     }
 
 
@@ -642,7 +644,9 @@ def main() -> int:
                     choices=('create', 'open', 'save-fields', 'booklet',
                              'mark-printed', 'preview', 'dict', 'trash-put',
                              'trash-list', 'export',
-                             'save-assets', 'apply-subtables', 'sync-preview'))
+                             'save-assets', 'apply-subtables', 'sync-preview',
+                             'ai-status', 'ai-extract', 'ai-rewrite',
+                             'ai-apply', 'ai-qa', 'aggregate'))
     ap.add_argument('--project', type=Path)
     ap.add_argument('--dir', type=Path)
     ap.add_argument('--fields', default='')
@@ -656,6 +660,11 @@ def main() -> int:
     ap.add_argument('--mode', default='booklet')
     ap.add_argument('--out', type=Path)
     ap.add_argument('--force', action='store_true')
+    ap.add_argument('--period', default='', choices=('', 'week', 'month'))
+    ap.add_argument('--from', dest='date_from', default='')
+    ap.add_argument('--to', dest='date_to', default='')
+    ap.add_argument('--text', default='')
+    ap.add_argument('--payload', default='')
     ap.add_argument('--json', action='store_true', dest='as_json')
     a = ap.parse_args()
     if not a.action:
@@ -668,12 +677,32 @@ def main() -> int:
             payload = result_payload(True, 'shell', 'dict v%s' % data.get('version'), stats=data)
             return emit_result(payload, True)
 
+        if a.action == 'ai-status':
+            data = ai_status(probe_network=True)
+            payload = result_payload(
+                True, 'shell',
+                'AI %s（%s）' % ('可用' if data.get('available') else '不可用', data.get('reason')),
+                stats=data)
+            return emit_result(payload, True)
+
         if a.action == 'create':
             if not a.dir:
                 return exit_param('create 需要 --dir', True, 'shell')
             fields = json.loads(a.fields or '{}')
             data = action_create(a.dir, fields)
             payload = result_payload(True, 'shell', '已建工程', stats=data)
+            return emit_result(payload, True)
+
+        if a.action == 'ai-extract':
+            argv = ['--action', 'extract', '--json']
+            if a.text:
+                argv.extend(['--text', a.text])
+            if a.payload:
+                argv.extend(['--payload', a.payload])
+            data = _run_engine(ENGINE / 'ai_engine.py', argv, 'ai-extract', timeout=60)
+            payload = result_payload(bool(data.get('ok')), 'shell',
+                                     data.get('summary') or '', stats=data)
+            payload['items'] = data.get('items') or []
             return emit_result(payload, True)
 
         if not a.project:
@@ -765,6 +794,63 @@ def main() -> int:
             data = _run_engine(ENGINE / 'export_engine.py', args[1:], 'export')
             payload = result_payload(data.get('exit') == 0, 'shell',
                                      data.get('summary') or '', stats=data)
+            return emit_result(payload, True)
+
+        if a.action == 'aggregate':
+            if not a.period:
+                return exit_param('aggregate 需要 --period week|month', True, 'shell')
+            argv = [
+                '--period', a.period,
+                '--project', str(pj),
+                '--json',
+            ]
+            if a.date_from:
+                argv.extend(['--from', a.date_from])
+            if a.date_to:
+                argv.extend(['--to', a.date_to])
+            if a.out:
+                argv.extend(['--out', str(a.out)])
+            data = _run_engine(ENGINE / 'aggregate_engine.py', argv, 'aggregate', timeout=180)
+            payload = result_payload(bool(data.get('ok')), 'shell',
+                                     data.get('summary') or '', stats=data)
+            payload['items'] = data.get('items') or []
+            payload['created'] = data.get('created') or {}
+            return emit_result(payload, True)
+
+        if a.action == 'ai-rewrite':
+            mode = a.mode if a.mode in ('draft', 'polish', 'expand') else 'polish'
+            argv = ['--action', mode, '--json', '--project', str(pj)]
+            if a.text:
+                argv.extend(['--text', a.text])
+            if a.payload:
+                argv.extend(['--payload', a.payload])
+            data = _run_engine(ENGINE / 'ai_engine.py', argv, 'ai-rewrite', timeout=90)
+            payload = result_payload(bool(data.get('ok')), 'shell',
+                                     data.get('summary') or '', stats=data)
+            payload['text'] = data.get('text') or ''
+            payload['items'] = data.get('items') or []
+            return emit_result(payload, True)
+
+        if a.action == 'ai-apply':
+            argv = ['--action', 'apply', '--json', '--project', str(pj)]
+            if a.payload:
+                argv.extend(['--payload', a.payload])
+            if a.rel_path:
+                argv.extend(['--rel-path', a.rel_path])
+            data = _run_engine(ENGINE / 'ai_engine.py', argv, 'ai-apply', timeout=60)
+            payload = result_payload(bool(data.get('ok')), 'shell',
+                                     data.get('summary') or '', stats=data)
+            payload['items'] = data.get('items') or []
+            return emit_result(payload, True)
+
+        if a.action == 'ai-qa':
+            argv = ['--action', 'qa', '--json', '--project', str(pj)]
+            data = _run_engine(ENGINE / 'ai_engine.py', argv, 'ai-qa', timeout=180)
+            payload = result_payload(bool(data.get('ok')), 'shell',
+                                     data.get('summary') or '', stats=data)
+            payload['narration'] = data.get('narration') or ''
+            payload['verify'] = data.get('verify') or {}
+            payload['items'] = data.get('items') or []
             return emit_result(payload, True)
 
         return exit_param('未知 action', True, 'shell')

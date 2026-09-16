@@ -4,7 +4,7 @@
 
 **建一个工程 = 建一个文件夹；点一次「一键成册」= 套完 37 份模板并填好 39 个字段。**
 
-当前进度：**P5 编辑升级 + 子表**（P0 填充回归仍保持 37 份 / 171 处 / 0 残留；P1–P4 保持绿）。编辑内核走 **E1 表单 + 只读预览 + 8 张子表网格**（V1 `pnpm add @genoffice/docx-engine` 为 npm 404，V3 产品路径 BLOCKED，不假装通过；不做 E2/E3 流式内核）。
+当前进度：**P6 AI 能力落地**（P0 填充回归仍保持 37 份 / 171 处 / 0 残留；P1–P5 保持绿）。编辑内核走 **E1 表单 + 只读预览 + 8 张子表网格**（V1 `pnpm add @genoffice/docx-engine` 为 npm 404，V3 产品路径 BLOCKED，不假装通过；不做 E2/E3 流式内核）。日志→周报→月报走**确定性规则引擎**，不让模型编造事实。凭据只走 `DEEPSEEK_API_KEY` 环境变量。
 
 > 施工入口请先读 [`docs/00_交付说明.md`](docs/00_交付说明.md) 和 [`docs/设计文档/施工交接说明.md`](docs/设计文档/施工交接说明.md)，不要从设计文档第一页通读。
 
@@ -134,6 +134,40 @@ python assets/engine/subtable_engine.py \
 
 ---
 
+## 怎么跑 P6（AI 能力落地）
+
+施工日志 → 周报 → 月报是 **T7 确定性聚合**（`aggregate` / `statistic` / `count` 规则），不调用模型。起草/润色/扩写/智能填表/查错问答走壳侧 AI 入口；**无 `DEEPSEEK_API_KEY` 或断网时全部置灰**，其余功能照常用。凭据只读环境变量，不进 Git。
+
+```bash
+python tools/run_p6_regression.py
+# 或先跳过 P0–P5
+python tools/run_p6_regression.py --skip-prior
+npm run p6:smoke
+```
+
+```bash
+# 5 篇带 logDate 的施工日志 → 周报四栏（窗口内无日志则 exit 1，不生成空周报）
+python assets/engine/aggregate_engine.py \
+  --period week --project work/some/project.json \
+  --from 2026-09-07 --to 2026-09-11 --json
+
+python assets/engine/ai_engine.py --action status --json
+python assets/engine/ai_engine.py --action extract --text '工程名称：……' --json
+# 下面这条在无 Key 时 ok=false，不会伪造润色正文
+python assets/engine/ai_engine.py --action polish --text '完成设备安装。' --json
+```
+
+Live 模型验收（本机有 Key 时才跑，CI/无 Key 的 VM 记 SKIP）：
+
+```bash
+export DEEPSEEK_API_KEY=...          # 不要写进仓库
+python assets/engine/ai_engine.py --action polish --text '完成设备安装。' --project <工程>/project.json --json
+```
+
+AI 落盘追加写入工程 `_logs/ai.jsonl` 与 `_logs/changes.jsonl`。智能填表必须先出确认面板（`confirmed[]`），空列表拒绝回写。
+
+---
+
 ## 仓库布局（双轨制）
 
 ```bash
@@ -190,9 +224,10 @@ work/                           引擎输出（gitignore；永不指向 template
 | `numbering_engine.py` | **P2 可用** | `{合同编号}-{表名缩写}-{流水号}`；删 02 不重排 03 |
 | `verify_engine.py` | **P2 可用** | §7 闸门；残留带 段N/表M行R列C |
 | `subtable_engine.py` | **P5 可用** | 8 张子表按表头列名识别；行克隆；空数组保留静态表 |
-| `aggregate_engine.py` | P0 骨架 | P6 日志→周报→月报 |
+| `aggregate_engine.py` | **P6 可用** | 日志→周报→月报（T7；无源 exit 1） |
+| `ai_engine.py` | **P6 可用** | status/extract/draft/polish/expand/apply/qa；无 Key 不伪造 |
 | `export_engine.py` | **P4 可用** | 单份/整册 PDF（pypdf 合并 + 中文页码） |
-| `shell_bridge.py` | **P5** | Electron JSON 桥：建档/字段/子表/_assets/半自动同步/成册/打印 |
+| `shell_bridge.py` | **P6** | Electron JSON 桥：成册/子表/周报/AI 入口/离线闸门 |
 
 通用约定（[`数据与规则规格.md` §3 / §6](docs/设计文档/数据与规则规格.md)）：具名长参数、`--json` 时 stdout **最后一行**为契约 JSON、`#PROGRESS` 进度行、退出码 `0/1/2/3`。
 

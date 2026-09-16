@@ -327,6 +327,54 @@ rules:
     require: { minDocs: 1 }
     fail: block
 
+  - id: agg.weeklyUndone
+    target: weeklyUndone
+    type: aggregate
+    from:
+      docs: { itemId: "二-10" }
+      dateWithin: week
+      field: weeklyUndone
+    transform:
+      dedup: true
+      order: date
+      join: "；"
+      skipValues: ["无"]
+    source: S4
+    on: [T7]
+    fail: warn
+
+  - id: agg.weeklyProblem
+    target: weeklyProblem
+    type: aggregate
+    from:
+      docs: { itemId: "二-10" }
+      dateWithin: week
+      field: siteIssue
+    transform:
+      dedup: true
+      order: date
+      join: "；"
+      skipValues: ["无"]
+    source: S4
+    on: [T7]
+    fail: warn
+
+  - id: agg.weeklyPlan
+    target: weeklyPlan
+    type: aggregate
+    from:
+      docs: { itemId: "二-10" }
+      dateWithin: week
+      field: coordination
+    transform:
+      dedup: true
+      order: date
+      join: "；"
+      skipValues: ["无"]
+    source: S4
+    on: [T7]
+    fail: warn
+
   - id: agg.monthlyDone
     target: monthlyDone
     type: aggregate
@@ -339,6 +387,54 @@ rules:
     on: [T7]
     require: { minDocs: 1 }
     fail: block
+
+  - id: agg.monthlyUndone
+    target: monthlyUndone
+    type: aggregate
+    from:
+      docs: { itemId: "二-11" }
+      dateWithin: month
+      field: weeklyUndone
+    transform:
+      dedup: true
+      order: date
+      join: "；"
+      skipValues: ["无", "（日志未记载）"]
+    source: S4
+    on: [T7]
+    fail: warn
+
+  - id: agg.monthlyProblem
+    target: monthlyProblem
+    type: aggregate
+    from:
+      docs: { itemId: "二-11" }
+      dateWithin: month
+      field: weeklyProblem
+    transform:
+      dedup: true
+      order: date
+      join: "；"
+      skipValues: ["无", "（日志未记载）"]
+    source: S4
+    on: [T7]
+    fail: warn
+
+  - id: agg.monthlyPlan
+    target: monthlyPlan
+    type: aggregate
+    from:
+      docs: { itemId: "二-11" }
+      dateWithin: month
+      field: weeklyPlan
+    transform:
+      dedup: true
+      order: date
+      join: "；"
+      skipValues: ["无", "（日志未记载）"]
+    source: S4
+    on: [T7]
+    fail: warn
 
   # ===== statistic（S4 / T7）=====
   - id: stat.weather

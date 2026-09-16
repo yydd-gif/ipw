@@ -194,6 +194,42 @@ ipcMain.handle('export-pdf', async (_e, { projectPath, mode, docId, force }) => 
   return runBridge(args);
 });
 
+ipcMain.handle('ai-status', async () => {
+  return runBridge(['--action', 'ai-status']);
+});
+
+ipcMain.handle('ai-extract', async (_e, { text, payload }) => {
+  const args = ['--action', 'ai-extract'];
+  if (text) args.push('--text', text);
+  if (payload) args.push('--payload', typeof payload === 'string' ? payload : JSON.stringify(payload));
+  return runBridge(args);
+});
+
+ipcMain.handle('ai-rewrite', async (_e, { projectPath, mode, text, payload }) => {
+  const args = ['--action', 'ai-rewrite', '--project', projectPath, '--mode', mode || 'polish'];
+  if (text) args.push('--text', text);
+  if (payload) args.push('--payload', typeof payload === 'string' ? payload : JSON.stringify(payload));
+  return runBridge(args);
+});
+
+ipcMain.handle('ai-apply', async (_e, { projectPath, payload, relPath }) => {
+  const args = ['--action', 'ai-apply', '--project', projectPath];
+  if (payload) args.push('--payload', typeof payload === 'string' ? payload : JSON.stringify(payload));
+  if (relPath) args.push('--rel-path', relPath);
+  return runBridge(args);
+});
+
+ipcMain.handle('ai-qa', async (_e, projectPath) => {
+  return runBridge(['--action', 'ai-qa', '--project', projectPath]);
+});
+
+ipcMain.handle('aggregate', async (_e, { projectPath, period, from, to }) => {
+  const args = ['--action', 'aggregate', '--project', projectPath, '--period', period || 'week'];
+  if (from) args.push('--from', from);
+  if (to) args.push('--to', to);
+  return runBridge(args);
+});
+
 ipcMain.handle('trash-put', async (_e, { projectPath, docId }) => {
   return runBridge(['--action', 'trash-put', '--project', projectPath, '--doc-id', docId]);
 });
