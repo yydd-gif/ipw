@@ -4,7 +4,7 @@
 
 **建一个工程 = 建一个文件夹；点一次「一键成册」= 套完 37 份模板并填好 39 个字段。**
 
-当前进度：**P2 生成与校验闭环**（P0 填充回归仍保持 37 份 / 171 处 / 0 残留；P1 FillPlan 回归保持绿）。
+当前进度：**P3 dsh / AI 层接入**（P0 填充回归仍保持 37 份 / 171 处 / 0 残留；P1 FillPlan 与 P2 成册/编号/校验回归保持绿）。
 
 > 施工入口请先读 [`docs/00_交付说明.md`](docs/00_交付说明.md) 和 [`docs/设计文档/施工交接说明.md`](docs/设计文档/施工交接说明.md)，不要从设计文档第一页通读。
 
@@ -75,6 +75,35 @@ python assets/engine/verify_engine.py \
 
 ---
 
+## 怎么跑 P3（dsh / AI 层）
+
+组合包源码在 [`packages/dsh-yanshou-docs`](packages/dsh-yanshou-docs)（v0.2：七个工具、双轨制配置、`dsh.bundle.patch` only）。**不 fork dsh**；凭据只走 `DEEPSEEK_API_KEY` 环境变量。
+
+```bash
+# 不需要模型 Key：静态契约 + 模板保护单测 +（有 pnpm 则）build/pack +（有 dsh 则）真 --dump-config
+python tools/run_p3_smoke.py
+```
+
+装运行时与派生 profile（施工图 [`docs/设计文档/P3-AI层接入施工图.md`](docs/设计文档/P3-AI层接入施工图.md) §7）：
+
+```bash
+pip install "deepseek-harness-sdk==0.1.5rc1"   # ADR-18：原生 dsh，不依赖系统 Node
+export DSH_HOME=/path/to/dsh-home              # 必须非空，绝不回退 ~/.dsh
+mkdir -p "$DSH_HOME"
+export DEEPSEEK_API_KEY=...                    # 不要写进 cordis.patch.yml / Git
+
+dsh --profile yanshou --from-default-profile sdk
+cd packages/dsh-yanshou-docs && pnpm install && pnpm build && pnpm pack
+dsh plugin --profile yanshou add ./dsh-yanshou-docs-0.2.0.tgz   # 必须用 tarball，不要 link:
+dsh --profile yanshou --dump-config
+# 期望：# == dsh-yanshou-docs
+# bundles = [@deepseek-ai/dsh-base, @deepseek-ai/dsh-sdk-app, dsh-yanshou-docs]
+```
+
+Headless / CI 默认 `ask` 会挂：生产壳走审批回调（P4）；CI 才用 `DSH_PERMISSION_MODE=danger-full-access`（见包内 `scripts/headless.env`）。**不要**把该值写进组合包 patch。
+
+---
+
 ## 仓库布局（双轨制）
 
 按 [`施工交接说明.md` §5](docs/设计文档/施工交接说明.md) 落地：**安装资产只读 + 工程数据可拷走**。
@@ -87,8 +116,9 @@ assets/                         ← 安装资产（只读约定）
   engine/                       7 个确定性引擎（fill/docgen/numbering/verify P2 可用；datafill P1）
   runtime/                      内嵌 Python 预留位（P7）
 lib/                            project.json 原子读写、字段字典、规则引擎、编号池
-tools/                          体检与回归脚本（stdlib only；含 run_p1_regression.py / run_p2_regression.py）
-docs/                           交付说明 + 设计文档 + 原始资料 + AI 组合包 + dsh 参考
+packages/dsh-yanshou-docs/      P3 组合包 v0.2（七工具 / patch 层 / 模板保护）
+tools/                          体检与回归脚本（含 run_p1 / run_p2 / run_p3_smoke.py）
+docs/                           交付说明 + 设计文档 + 原始资料 + AI 组合包指针 + dsh 参考
 examples/demo_project.json      试跑工程数据
 src/                            Electron 壳预留（P4）
 work/                           引擎输出（gitignore；永不指向 templates）
