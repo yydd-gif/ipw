@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>验收资料编辑软件</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <div class="titlebar">
+    <span class="appdot"></span>
+    <span class="title-text" id="titleText">验收资料编辑软件 — 未打开工程</span>
+    <span class="dirty hidden" id="dirtyMark">*</span>
+    <span class="winbtns">P4 MVP</span>
+  </div>
+  <div class="banner" id="modeBanner">编辑内核：E1 表单 + 只读预览（V3 保真写回未放行）</div>
+  <div class="menubar">
+    <button class="menu-item" data-act="create">文件</button>
+    <button class="menu-item" data-act="noop">编辑</button>
+    <button class="menu-item" data-act="ledger">视图</button>
+    <button class="menu-item" data-act="info">工程</button>
+    <button class="menu-item" data-act="about">帮助</button>
+  </div>
+  <div class="ribbon">
+    <div class="rg">
+      <div class="rg-items">
+        <button class="ri primary" data-act="create"><span class="ri-ico">+</span><span class="ri-lb">新建工程</span></button>
+        <button class="ri" data-act="open"><span class="ri-ico">📂</span><span class="ri-lb">打开</span></button>
+        <button class="ri" data-act="save" id="btnSave"><span class="ri-ico">💾</span><span class="ri-lb">保存</span></button>
+        <button class="ri" data-act="info"><span class="ri-ico">i</span><span class="ri-lb">工程信息</span></button>
+        <button class="ri" data-act="booklet"><span class="ri-ico">📚</span><span class="ri-lb">一键成册</span></button>
+      </div>
+      <div class="rg-name">工程</div>
+    </div>
+    <div class="rg">
+      <div class="rg-items">
+        <button class="ri" data-act="print-mark"><span class="ri-ico">🖨</span><span class="ri-lb">打印标记</span></button>
+        <button class="ri" data-act="print-preview"><span class="ri-ico">👁</span><span class="ri-lb">打印预览</span></button>
+        <button class="ri" data-act="export"><span class="ri-ico">⬆</span><span class="ri-lb">导出 PDF</span></button>
+        <button class="ri" data-act="ledger"><span class="ri-ico">☰</span><span class="ri-lb">台账</span></button>
+        <button class="ri" data-act="find"><span class="ri-ico">⌕</span><span class="ri-lb">查找</span></button>
+      </div>
+      <div class="rg-name">文档</div>
+    </div>
+    <div class="rg">
+      <div class="rg-items">
+        <button class="ri" disabled title="P6+"><span class="ri-ico">💬</span><span class="ri-lb">客服</span></button>
+        <button class="ri" disabled title="P6+"><span class="ri-ico">🛒</span><span class="ri-lb">商城</span></button>
+        <button class="ri" data-act="about"><span class="ri-ico">?</span><span class="ri-lb">关于</span></button>
+        <button class="ri" data-act="quit"><span class="ri-ico">⎋</span><span class="ri-lb">退出</span></button>
+      </div>
+      <div class="rg-name">服务</div>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="left">
+      <div class="tabs">
+        <button class="tab on" data-tab="tree">表格目录</button>
+        <button class="tab" data-tab="trash">回收站</button>
+        <button class="tab" data-tab="search">查找结果</button>
+      </div>
+      <div class="tree" id="treePane"></div>
+    </div>
+    <div class="right">
+      <div class="editor-toolbar">
+        <button class="etab on" data-view="preview">预览</button>
+        <button class="etab" data-view="ledger">台账</button>
+        <button class="etab" data-view="jobs">作业</button>
+        <span class="tool-sp">
+          <button class="mini-btn" id="btnPanel">面板 ◀</button>
+        </span>
+      </div>
+      <div class="canvas">
+        <div class="page" id="mainPane">
+          <p class="empty-hint">新建或打开一个工程文件夹开始。一键成册会调用 datafill → fill → docgen → verify。</p>
+        </div>
+        <div class="fields" id="fieldPanel">
+          <div class="fp-head">字段面板（39）<button class="collapse" id="btnCollapse">◀ 折叠</button></div>
+          <div class="fp-body" id="fieldBody"></div>
+          <div class="fp-foot"><button class="btn-full" id="btnSync">保存并写入工程</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="statusbar">
+    <span><span class="pulse"></span><span id="sbEngine">引擎就绪</span></span>
+    <span id="sbPage">E1 只读预览</span>
+    <span id="sbDone">本册完成度 —</span>
+    <span class="sb-r">
+      <span id="sbDirty">未保存更改 0 处</span>
+      <span>模板资产 v1.0（37 份）</span>
+      <span>只读保护：开</span>
+    </span>
+  </div>
+</div>
+
+<div class="overlay hidden" id="dlgCreate">
+  <div class="dialog">
+    <div class="dlg-h">新建工程</div>
+    <div class="dlg-b">
+      <div class="fld"><label>工程名称 *</label><input id="c_projectName" placeholder="岳阳市……工程"></div>
+      <div class="fld"><label>建设单位 *</label><input id="c_ownerUnit"></div>
+      <div class="fld"><label>施工单位 *</label><input id="c_constructionUnit"></div>
+      <div class="fld"><label>合同编号</label><input id="c_contractNo" placeholder="YY123"></div>
+      <p class="empty-hint" style="padding:0;text-align:left;">随后选择一个文件夹作为工程目录。日期字段不自动填。</p>
+    </div>
+    <div class="dlg-f"><button class="btn" data-close="dlgCreate">取消</button><button class="btn pri" id="btnCreateGo">选择目录并创建</button></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="dlgExport">
+  <div class="dialog">
+    <div class="dlg-h">导出 PDF</div>
+    <div class="dlg-b">
+      <div class="opt"><label><input type="radio" name="exmode" value="booklet" checked> 按目录顺序合并整册</label></div>
+      <div class="opt"><label><input type="radio" name="exmode" value="single"> 仅当前文档</label></div>
+      <div class="opt"><label><input type="checkbox" id="exForce"> 忽略必填裸导出（不推荐）</label></div>
+      <div class="warnbox" id="exWarn">导出将写入 <code>_导出/</code>，并用 pypdf 合并、加「第 N 页」。中文嵌入系统 TTF。</div>
+    </div>
+    <div class="dlg-f"><button class="btn" data-close="dlgExport">取消</button><button class="btn pri" id="btnExportGo">开始导出</button></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="dlgAbout">
+  <div class="dialog">
+    <div class="dlg-h">关于</div>
+    <div class="dlg-b">
+      <p><b>验收资料的自动生成与管理系统，内建够用的文档编辑能力。</b></p>
+      <p>不是 Office 替代品。P4 壳 MVP：E1 表单填写 + 只读预览。确定性内核仍是 Python 七引擎，本壳只通过 child_process 调用。</p>
+      <p id="aboutFidelity"></p>
+    </div>
+    <div class="dlg-f"><button class="btn pri" data-close="dlgAbout">关闭</button></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

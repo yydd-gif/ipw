@@ -1,0 +1,8 @@
+{
+  "v1": "BLOCKED",
+  "v2": "PASS",
+  "v3": "BLOCKED",
+  "v4": "PASS",
+  "editorMode": "E1",
+  "note": "@genoffice/docx-engine 未发布到 npm（private:true / 404）。壳走 E1 表单 + 只读预览。clone 探针 V3=PASS（不作为产品放行）。"
+}

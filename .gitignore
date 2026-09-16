@@ -21,3 +21,7 @@ Thumbs.db
 # node (P3+)
 node_modules/
 *.tgz
+
+# electron
+dist/
+out/

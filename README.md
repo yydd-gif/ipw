@@ -4,7 +4,7 @@
 
 **建一个工程 = 建一个文件夹；点一次「一键成册」= 套完 37 份模板并填好 39 个字段。**
 
-当前进度：**P3 dsh / AI 层接入**（P0 填充回归仍保持 37 份 / 171 处 / 0 残留；P1 FillPlan 与 P2 成册/编号/校验回归保持绿）。
+当前进度：**P4 内核验证 + Electron 壳 MVP**（P0 填充回归仍保持 37 份 / 171 处 / 0 残留；P1 FillPlan 与 P2 成册/编号/校验、P3 组合包契约保持绿）。编辑内核走 **E1 表单 + 只读预览**（V1 `pnpm add @genoffice/docx-engine` 为 npm 404，V3 产品路径 BLOCKED，不假装通过）。
 
 > 施工入口请先读 [`docs/00_交付说明.md`](docs/00_交付说明.md) 和 [`docs/设计文档/施工交接说明.md`](docs/设计文档/施工交接说明.md)，不要从设计文档第一页通读。
 
@@ -84,7 +84,34 @@ python assets/engine/verify_engine.py \
 python tools/run_p3_smoke.py
 ```
 
-装运行时与派生 profile（施工图 [`docs/设计文档/P3-AI层接入施工图.md`](docs/设计文档/P3-AI层接入施工图.md) §7）：
+---
+
+## 怎么跑 P4（V1–V4 保真门 + Electron 壳）
+
+Python 3.12+ 标准库 + **`pypdf`**（整册 PDF 合并/页码；中文嵌入系统 TTF，本仓库用 `requirements-p4.txt`）。
+
+```bash
+pip install -r requirements-p4.txt
+python tools/run_p4_gate.py     # V1–V4 证据（写 src/fidelity-status.json）
+python tools/run_p4_smoke.py    # 门禁 + shell_bridge + 打印状态持久化 + P0–P3 回归
+# 或
+npm run p4:smoke
+```
+
+桌面壳（Node ≥ 22.14，建议 22.19+）：
+
+```bash
+npm install
+npm run dev
+```
+
+Linux 无沙箱环境会自动加 `--no-sandbox`。界面：新建/打开工程文件夹 → 左侧三页签树（填写四色点 + 独立「印」角标）→ 右侧台账/只读预览/作业面板 + 39 字段 E1 表单 → **一键成册**（child_process：`datafill` → `fill` → `docgen` → `verify`）→ 打印标记（`_printStates`）→ 导出整册 PDF。
+
+V1–V4 怎么读结果：看 PR 说明或 `src/fidelity-status.json`。**V3 未放行时不要接 genoffice 编辑器。**
+
+---
+
+## 仓库布局（双轨制）
 
 ```bash
 pip install "deepseek-harness-sdk==0.1.5rc1"   # ADR-18：原生 dsh，不依赖系统 Node
@@ -113,20 +140,20 @@ assets/                         ← 安装资产（只读约定）
   templates/                    37 份现役模板（中文分册名，冻结；引擎不得写入）
   templates-backup/             注入后冻结副本 + SHA256清单.json
   spec/                         字段字典 / 表名缩写字典 / 填数规则.yaml（P1 正式 9 类规则）/ 软件目录.docx
-  engine/                       7 个确定性引擎（fill/docgen/numbering/verify P2 可用；datafill P1）
+  engine/                       7 个确定性引擎 + P4 export/shell_bridge
   runtime/                      内嵌 Python 预留位（P7）
-lib/                            project.json 原子读写、字段字典、规则引擎、编号池
+lib/                            project.json 原子读写、字段字典、规则引擎、编号池、CJK PDF
 packages/dsh-yanshou-docs/      P3 组合包 v0.2（七工具 / patch 层 / 模板保护）
-tools/                          体检与回归脚本（含 run_p1 / run_p2 / run_p3_smoke.py）
+tools/                          体检与回归脚本（含 run_p1 / run_p2 / run_p3_smoke / run_p4_smoke.py）
 docs/                           交付说明 + 设计文档 + 原始资料 + AI 组合包指针 + dsh 参考
 examples/demo_project.json      试跑工程数据
-src/                            Electron 壳预留（P4）
+src/                            Electron 壳 MVP（E1）
 work/                           引擎输出（gitignore；永不指向 templates）
 ```
 
 模板文件名保持中文（本环境 / git 均支持 UTF-8）。若某台机器无法检出中文路径，对照 `assets/spec/表名缩写字典.csv` 的「目录项名」列与分册名即可。
 
-工程数据目录（用户选的文件夹）的契约见 [`数据与规则规格.md` §1.2](docs/设计文档/数据与规则规格.md)，P0 尚未建桌面壳，试跑输出暂落在 `work/`。
+工程数据目录（用户选的文件夹）的契约见 [`数据与规则规格.md` §1.2](docs/设计文档/数据与规则规格.md)。P4 壳把该文件夹当作工程：里面是 `project.json` + 分册目录。
 
 ---
 
@@ -141,6 +168,8 @@ work/                           引擎输出（gitignore；永不指向 template
 | `verify_engine.py` | **P2 可用** | §7 闸门；残留带 段N/表M行R列C |
 | `subtable_engine.py` | P0 骨架 | P5 八张子表 |
 | `aggregate_engine.py` | P0 骨架 | P6 日志→周报→月报 |
+| `export_engine.py` | **P4 可用** | 单份/整册 PDF（pypdf 合并 + 中文页码） |
+| `shell_bridge.py` | **P4 可用** | Electron JSON 桥：建档/打开/字段/成册/打印/预览 |
 
 通用约定（[`数据与规则规格.md` §3 / §6](docs/设计文档/数据与规则规格.md)）：具名长参数、`--json` 时 stdout **最后一行**为契约 JSON、`#PROGRESS` 进度行、退出码 `0/1/2/3`。
 
