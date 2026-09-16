@@ -11,7 +11,7 @@
     <span class="appdot"></span>
     <span class="title-text" id="titleText">验收资料编辑软件 — 未打开工程</span>
     <span class="dirty hidden" id="dirtyMark">*</span>
-    <span class="winbtns">P4 MVP</span>
+    <span class="winbtns">P5 E1</span>
   </div>
   <div class="banner" id="modeBanner">编辑内核：E1 表单 + 只读预览（V3 保真写回未放行）</div>
   <div class="menubar">
@@ -66,6 +66,7 @@
       <div class="editor-toolbar">
         <button class="etab on" data-view="preview">预览</button>
         <button class="etab" data-view="ledger">台账</button>
+        <button class="etab" data-view="tables">子表</button>
         <button class="etab" data-view="jobs">作业</button>
         <span class="tool-sp">
           <button class="mini-btn" id="btnPanel">面板 ◀</button>
@@ -78,7 +79,10 @@
         <div class="fields" id="fieldPanel">
           <div class="fp-head">字段面板（39）<button class="collapse" id="btnCollapse">◀ 折叠</button></div>
           <div class="fp-body" id="fieldBody"></div>
-          <div class="fp-foot"><button class="btn-full" id="btnSync">保存并写入工程</button></div>
+          <div class="fp-foot">
+            <button class="btn-full" id="btnSync">保存并写入工程</button>
+            <p class="fp-hint">改项目级字段会提示：仅本份 / 同步全册 / 撤销</p>
+          </div>
         </div>
       </div>
     </div>
@@ -127,10 +131,26 @@
     <div class="dlg-h">关于</div>
     <div class="dlg-b">
       <p><b>验收资料的自动生成与管理系统，内建够用的文档编辑能力。</b></p>
-      <p>不是 Office 替代品。P4 壳 MVP：E1 表单填写 + 只读预览。确定性内核仍是 Python 七引擎，本壳只通过 child_process 调用。</p>
+      <p>不是 Office 替代品。P5：E1 表单 + 8 张子表网格 + 半自动同步。V3 保真写回未放行，不做 E2/E3 内核。确定性内核仍是 Python 引擎，本壳只通过 child_process 调用。</p>
       <p id="aboutFidelity"></p>
     </div>
     <div class="dlg-f"><button class="btn pri" data-close="dlgAbout">关闭</button></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="dlgSync">
+  <div class="dialog wide">
+    <div class="dlg-h">项目级字段已改 · 半自动同步</div>
+    <div class="dlg-b">
+      <p id="syncIntro" class="sync-intro"></p>
+      <div id="syncBody"></div>
+      <p class="empty-hint" style="padding:8px 0;text-align:left;">「仅本份」写入当前文档的覆盖，不改项目档案、不碰其他文档。「同步全册」改项目级值并回写已生成文档（已被仅本份锁定的除外）。</p>
+    </div>
+    <div class="dlg-f">
+      <button class="btn" id="btnSyncRevert">撤销</button>
+      <button class="btn" id="btnSyncThis">仅本份</button>
+      <button class="btn pri" id="btnSyncAll">同步全册</button>
+    </div>
   </div>
 </div>
 

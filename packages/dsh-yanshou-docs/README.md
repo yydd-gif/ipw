@@ -37,7 +37,7 @@ dsh --profile yanshou  （headless 后端，upstream 一行未改）
 | `yanshou_numbering` | `numbering_engine.py` | 编号；删 02 不重排 03 |
 | `yanshou_verify` | `verify_engine.py` | 导出前校验闸门 |
 | `yanshou_aggregate` | `aggregate_engine.py` | 日志→周报/月报（P6 骨架；模型先归纳） |
-| `yanshou_subtable` | `subtable_engine.py` | 子表接管（P5 骨架；先注册避免「脚本不存在」） |
+| `yanshou_subtable` | `subtable_engine.py` | 子表接管（P5：8 张行克隆） |
 
 ## 配置：双轨制
 
@@ -193,5 +193,5 @@ python tools/run_p3_smoke.py
 
 - **全局 `tools/pre-execute` 钩子未启用** —— 签名未确认，本阶段只靠工具内 `assertWritable()`。
 - **审批回调的 RPC 形状未确认** —— P4 壳实现方案 A；P3 CI 走 `DSH_PERMISSION_MODE` 后门。
-- **`yanshou_subtable` / `yanshou_aggregate` 引擎仍是骨架** —— 工具已注册，返回 not-implemented 契约，而不是「脚本不存在」。
+- **`yanshou_aggregate` 引擎仍是骨架** —— P6 才做日志→周报。`yanshou_subtable` 在 P5 已做行克隆。
 - **模型真调一轮需要 `DEEPSEEK_API_KEY`** —— 不写进仓库。无 Key 时不要假装跑过步骤 4。

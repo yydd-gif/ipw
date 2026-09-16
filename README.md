@@ -4,7 +4,7 @@
 
 **建一个工程 = 建一个文件夹；点一次「一键成册」= 套完 37 份模板并填好 39 个字段。**
 
-当前进度：**P4 内核验证 + Electron 壳 MVP**（P0 填充回归仍保持 37 份 / 171 处 / 0 残留；P1 FillPlan 与 P2 成册/编号/校验、P3 组合包契约保持绿）。编辑内核走 **E1 表单 + 只读预览**（V1 `pnpm add @genoffice/docx-engine` 为 npm 404，V3 产品路径 BLOCKED，不假装通过）。
+当前进度：**P5 编辑升级 + 子表**（P0 填充回归仍保持 37 份 / 171 处 / 0 残留；P1–P4 保持绿）。编辑内核走 **E1 表单 + 只读预览 + 8 张子表网格**（V1 `pnpm add @genoffice/docx-engine` 为 npm 404，V3 产品路径 BLOCKED，不假装通过；不做 E2/E3 流式内核）。
 
 > 施工入口请先读 [`docs/00_交付说明.md`](docs/00_交付说明.md) 和 [`docs/设计文档/施工交接说明.md`](docs/设计文档/施工交接说明.md)，不要从设计文档第一页通读。
 
@@ -113,6 +113,27 @@ V1–V4 怎么读结果：看 PR 说明或 `src/fidelity-status.json`。**V3 未
 
 ---
 
+## 怎么跑 P5（编辑升级 + 子表）
+
+```bash
+python tools/run_p5_regression.py
+# 或先跳过 P0–P4
+python tools/run_p5_regression.py --skip-prior
+npm run p5:smoke
+```
+
+- `subtable_engine.py`：按 `字段字典.json` → `tables[].columns` 识别 8 张子表，喂 N 行到空表出 N 行（克隆行、不动 `w:tblGrid`）。Zip→XML 写工程文档，**永不写 `assets/templates/`**。空数组保留模板静态行。
+- 壳：E1「子表」页 8 张网格；保存走引擎回写已生成文档。
+- 改项目级字段会提示「仅本份 / 同步全册 / 撤销」。仅本份只写 `_documents[本份]`，不改档案、不碰其他文档。有 P2 `yz_` 锚点则按书签回写。
+- 成册时程序侧把八 1 卷册补到 8 分册、八 2 目录勾选表按清单生成、八 3 隔页扩到 8 组。
+
+```bash
+python assets/engine/subtable_engine.py \
+  --doc work/some.docx --table deviceList --data rows.json --json
+```
+
+---
+
 ## 仓库布局（双轨制）
 
 ```bash
@@ -142,11 +163,11 @@ assets/                         ← 安装资产（只读约定）
   templates/                    37 份现役模板（中文分册名，冻结；引擎不得写入）
   templates-backup/             注入后冻结副本 + SHA256清单.json
   spec/                         字段字典 / 表名缩写字典 / 填数规则.yaml（P1 正式 9 类规则）/ 软件目录.docx
-  engine/                       7 个确定性引擎 + P4 export/shell_bridge
+  engine/                       7 个确定性引擎 + P4 export/shell_bridge + P5 子表
   runtime/                      内嵌 Python 预留位（P7）
-lib/                            project.json 原子读写、字段字典、规则引擎、编号池、CJK PDF
+lib/                            project.json 原子读写、字段字典、规则引擎、编号池、CJK PDF、子表/同步
 packages/dsh-yanshou-docs/      P3 组合包 v0.2（七工具 / patch 层 / 模板保护）
-tools/                          体检与回归脚本（含 run_p1 / run_p2 / run_p3_smoke / run_p4_smoke.py）
+tools/                          体检与回归脚本（含 run_p1 / run_p2 / run_p3_smoke / run_p4_smoke / run_p5_regression.py）
 docs/                           交付说明 + 设计文档 + 原始资料 + AI 组合包指针 + dsh 参考
 examples/demo_project.json      试跑工程数据
 src/                            Electron 壳 MVP（E1）
@@ -168,10 +189,10 @@ work/                           引擎输出（gitignore；永不指向 template
 | `docgen_engine.py` | **P2 可用** | 一键成册 / 单份 / 追加 / 无模板三选一 / 编号绑定 |
 | `numbering_engine.py` | **P2 可用** | `{合同编号}-{表名缩写}-{流水号}`；删 02 不重排 03 |
 | `verify_engine.py` | **P2 可用** | §7 闸门；残留带 段N/表M行R列C |
-| `subtable_engine.py` | P0 骨架 | P5 八张子表 |
+| `subtable_engine.py` | **P5 可用** | 8 张子表按表头列名识别；行克隆；空数组保留静态表 |
 | `aggregate_engine.py` | P0 骨架 | P6 日志→周报→月报 |
 | `export_engine.py` | **P4 可用** | 单份/整册 PDF（pypdf 合并 + 中文页码） |
-| `shell_bridge.py` | **P4 可用** | Electron JSON 桥：建档/打开/字段/成册/打印/预览 |
+| `shell_bridge.py` | **P5** | Electron JSON 桥：建档/字段/子表/_assets/半自动同步/成册/打印 |
 
 通用约定（[`数据与规则规格.md` §3 / §6](docs/设计文档/数据与规则规格.md)）：具名长参数、`--json` 时 stdout **最后一行**为契约 JSON、`#PROGRESS` 进度行、退出码 `0/1/2/3`。
 

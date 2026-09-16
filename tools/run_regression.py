@@ -233,13 +233,15 @@ def main() -> int:
     sandbox.mkdir(parents=True, exist_ok=True)
     sandbox_pj = sandbox / 'project.json'
     shutil.copy2(demo, sandbox_pj)
+    subtable_copy = sandbox / 'subtable-probe.docx'
+    shutil.copy2(templates[0], subtable_copy)
     skeleton_cmds = [
         (['datafill_engine.py', '--project', str(demo), '--out', str(WORK / 'fillplan.json'), '--json'], 0),
         (['docgen_engine.py', '--project', str(sandbox_pj), '--item', '二-01',
           '--out', str(sandbox), '--json'], 0),
         (['numbering_engine.py', '--project', str(sandbox_pj), '--item', '二-02', '--json'], 0),
         (['aggregate_engine.py', '--period', 'week', '--project', str(demo), '--json'], 0),
-        (['subtable_engine.py', '--doc', str(templates[0]), '--json'], 0),
+        (['subtable_engine.py', '--doc', str(subtable_copy), '--json'], 0),
         (['verify_engine.py', '--dir', str(out_dir), '--json'], 0),
         (['datafill_engine.py', '--json'], 2),
     ]
