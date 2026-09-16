@@ -4,7 +4,7 @@
 
 **建一个工程 = 建一个文件夹；点一次「一键成册」= 套完 37 份模板并填好 39 个字段。**
 
-当前进度：**P0 底座固化**。填充引擎可在无 `lxml` / 无 `python-docx` 的标准库环境下跑通回归。
+当前进度：**P1 数据与规则**（P0 填充回归仍保持 37 份 / 171 处 / 0 残留）。
 
 > 施工入口请先读 [`docs/00_交付说明.md`](docs/00_交付说明.md) 和 [`docs/设计文档/施工交接说明.md`](docs/设计文档/施工交接说明.md)，不要从设计文档第一页通读。
 
@@ -35,6 +35,22 @@ stdout 中会穿插 `#PROGRESS <done>/<total> <文件>` 进度行；解析 JSON 
 
 ---
 
+## 怎么跑 P1（数据与规则）
+
+同样是 Python 3.12+ 标准库（**不要装 PyYAML / lxml**；规则 YAML 由 `lib/yaml_lite.py` 解析）。
+
+```bash
+python tools/run_p1_regression.py
+
+python assets/engine/datafill_engine.py \
+  --project examples/demo_project.json \
+  --out work/fillplan.json --json
+```
+
+FillPlan 写入 `--out`（`sort_keys` 规范化 JSON）。同一输入跑两次，文件逐字节一致。把日期字段配成自动填、或规则引用字典里不存在的 key → **exit 3**。
+
+---
+
 ## 仓库布局（双轨制）
 
 按 [`施工交接说明.md` §5](docs/设计文档/施工交接说明.md) 落地：**安装资产只读 + 工程数据可拷走**。
@@ -43,10 +59,11 @@ stdout 中会穿插 `#PROGRESS <done>/<total> <文件>` 进度行；解析 JSON 
 assets/                         ← 安装资产（只读约定）
   templates/                    37 份现役模板（中文分册名，冻结；引擎不得写入）
   templates-backup/             注入后冻结副本 + SHA256清单.json
-  spec/                         字段字典 / 表名缩写字典 / 填数规则.yaml（P0 骨架）/ 软件目录.docx
-  engine/                       7 个确定性引擎（fill 可跑；其余 P0 骨架）
+  spec/                         字段字典 / 表名缩写字典 / 填数规则.yaml（P1 正式 9 类规则）/ 软件目录.docx
+  engine/                       7 个确定性引擎（fill P0 可用；datafill P1 可用；其余骨架）
   runtime/                      内嵌 Python 预留位（P7）
-tools/                          体检与回归脚本（stdlib only）
+lib/                            project.json 原子读写、字段字典、规则引擎
+tools/                          体检与回归脚本（stdlib only；含 run_p1_regression.py）
 docs/                           交付说明 + 设计文档 + 原始资料 + AI 组合包 + dsh 参考
 examples/demo_project.json      试跑工程数据
 src/                            Electron 壳预留（P4）
@@ -64,7 +81,7 @@ work/                           引擎输出（gitignore；永不指向 template
 | 脚本 | 状态 | 说明 |
 |---|---|---|
 | `assets/engine/fill_engine.py` | **P0 可用** | zip → XML → 按 infolist 写回；同段落跨 run 合并替换 |
-| `datafill_engine.py` | P0 骨架 | P1 实现 FillPlan / 9 类规则 |
+| `datafill_engine.py` | **P1 可用** | 9 类规则 → FillPlan；`--json` / exit 0/1/2/3 |
 | `docgen_engine.py` | P0 骨架 | P2 一键成册 |
 | `numbering_engine.py` | P0 骨架 | P2 编号（目录项内不重排） |
 | `verify_engine.py` | P0 残留扫描 | P2 补齐 §7 全量校验 |

@@ -1,8 +1,8 @@
-# 填数规则.yaml — P0 stub
-# Full 9-class rule engine lands in P1 (数据与规则规格.md §4).
-# dateAutoFill is a closed-set hard rule: engines MUST refuse (exit 3)
-# if any rule target hits policies.manualFields.
+# 填数规则.yaml v1.0 · 39 启用字段 / 9 类规则
+# 唯一真源：docs/设计文档/数据与规则规格.md §4
+# 日期不自动填：policies.dateAutoFill 固定 false；target 命中 manualFields → 加载期 exit 3
 version: "1.0"
+
 policies:
   dateAutoFill: false
   subtableMode: program-side
@@ -25,8 +25,383 @@ policies:
     patterns:
       - "^expert.*"
       - ".*Sign$"
-rules: []
-tables: {}
+
+# ── 规则：每个启用字段至少一条；type 仅 9 类 ──
+rules:
+  # ===== direct（项目档案 S1）=====
+  - id: proj.projectName
+    target: projectName
+    type: direct
+    from: project.projectName
+    source: S1
+    on: [T1, T2]
+    overridable: false
+
+  - id: proj.contractNo
+    target: contractNo
+    type: direct
+    from: project.contractNo
+    source: S1
+    on: [T1]
+
+  - id: proj.approvalDocNo
+    target: approvalDocNo
+    type: direct
+    from: project.approvalDocNo
+    source: S1
+    on: [T1]
+
+  - id: proj.projectBackground
+    target: projectBackground
+    type: direct
+    from: project.projectBackground
+    source: S1
+    on: [T1]
+    overridable: true
+
+  - id: proj.projectGoal
+    target: projectGoal
+    type: direct
+    from: project.projectGoal
+    source: S1
+    on: [T1]
+    overridable: true
+
+  - id: proj.projectContent
+    target: projectContent
+    type: direct
+    from: project.projectContent
+    source: S1
+    on: [T1]
+    overridable: true
+
+  - id: proj.ownerUnit
+    target: ownerUnit
+    type: direct
+    from: project.ownerUnit
+    source: S1
+    on: [T1]
+
+  - id: proj.ownerCreditCode
+    target: ownerCreditCode
+    type: direct
+    from: project.ownerCreditCode
+    source: S1
+    on: [T1]
+
+  - id: proj.constructionUnit
+    target: constructionUnit
+    type: direct
+    from: project.constructionUnit
+    source: S1
+    on: [T1]
+
+  - id: proj.constructionCreditCode
+    target: constructionCreditCode
+    type: direct
+    from: project.constructionCreditCode
+    source: S1
+    on: [T1]
+
+  - id: proj.constructionContact
+    target: constructionContact
+    type: direct
+    from: project.constructionContact
+    source: S1
+    on: [T1]
+
+  - id: proj.supervisionUnit
+    target: supervisionUnit
+    type: direct
+    from: project.supervisionUnit
+    source: S1
+    on: [T1]
+
+  - id: proj.supervisionCreditCode
+    target: supervisionCreditCode
+    type: direct
+    from: project.supervisionCreditCode
+    source: S1
+    on: [T1]
+
+  - id: proj.supervisionContact
+    target: supervisionContact
+    type: direct
+    from: project.supervisionContact
+    source: S1
+    on: [T1]
+
+  - id: proj.supervisionPhone
+    target: supervisionPhone
+    type: direct
+    from: project.supervisionPhone
+    source: S1
+    on: [T1]
+
+  - id: proj.projectManager
+    target: projectManager
+    type: direct
+    from: project.projectManager
+    source: S1
+    on: [T1]
+
+  - id: proj.managerIdCard
+    target: managerIdCard
+    type: direct
+    from: project.managerIdCard
+    source: S1
+    on: [T1]
+
+  - id: proj.chiefSupervisor
+    target: chiefSupervisor
+    type: direct
+    from: project.chiefSupervisor
+    source: S1
+    on: [T1]
+
+  - id: proj.projectStage
+    target: projectStage
+    type: direct
+    from: project.projectStage
+    source: S2
+    on: [T1, T5]
+    overridable: true
+
+  - id: doc.weather
+    target: weather
+    type: direct
+    from: doc.weather
+    source: S3
+    on: [T5, T6]
+    overridable: true
+
+  - id: doc.todayWork
+    target: todayWork
+    type: direct
+    from: doc.todayWork
+    source: S3
+    on: [T5]
+    overridable: true
+
+  - id: doc.workerCount
+    target: workerCount
+    type: direct
+    from: doc.workerCount
+    source: S3
+    on: [T5]
+    overridable: true
+
+  - id: doc.siteIssue
+    target: siteIssue
+    type: direct
+    from: doc.siteIssue
+    source: S3
+    on: [T5]
+    overridable: true
+
+  - id: doc.coordination
+    target: coordination
+    type: direct
+    from: doc.coordination
+    source: S3
+    on: [T5]
+    overridable: true
+
+  - id: doc.weeklyUndone
+    target: weeklyUndone
+    type: direct
+    from: doc.weeklyUndone
+    source: S3
+    on: [T5]
+    overridable: true
+
+  - id: doc.weeklyProblem
+    target: weeklyProblem
+    type: direct
+    from: doc.weeklyProblem
+    source: S3
+    on: [T5]
+    overridable: true
+
+  - id: doc.weeklyPlan
+    target: weeklyPlan
+    type: direct
+    from: doc.weeklyPlan
+    source: S3
+    on: [T5]
+    overridable: true
+
+  - id: doc.monthlyUndone
+    target: monthlyUndone
+    type: direct
+    from: doc.monthlyUndone
+    source: S3
+    on: [T5]
+    overridable: true
+
+  - id: doc.monthlyProblem
+    target: monthlyProblem
+    type: direct
+    from: doc.monthlyProblem
+    source: S3
+    on: [T5]
+    overridable: true
+
+  - id: doc.monthlyPlan
+    target: monthlyPlan
+    type: direct
+    from: doc.monthlyPlan
+    source: S3
+    on: [T5]
+    overridable: true
+
+  - id: doc.trialRunUserCount
+    target: trialRunUserCount
+    type: direct
+    from: project.trialRunUserCount
+    source: S1
+    on: [T1]
+    overridable: true
+
+  - id: inherit.handoverPlace
+    target: handoverPlace
+    type: direct
+    from: project.buildSite
+    source: S2
+    on: [T2]
+    overridable: true
+
+  # ===== format（S2）=====
+  - id: fmt.contractAmount
+    target: contractAmount
+    type: format
+    from: project.contractAmount
+    transform: { num: true, decimals: 2, strip: true }
+    source: S2
+    on: [T1]
+
+  - id: fmt.constructionPhone
+    target: constructionPhone
+    type: format
+    from: project.constructionPhone
+    transform: { strip: true }
+    source: S2
+    on: [T1]
+
+  # ===== compose（S2）=====
+  - id: compose.buildSite
+    target: buildSite
+    type: compose
+    parts: [project.buildSite]
+    join: ""
+    skipEmpty: true
+    source: S2
+    on: [T1]
+    overridable: true
+
+  # ===== alias（S5，必须人工确认，不静默落库）=====
+  - id: alias.constructionUnit
+    target: constructionUnit
+    type: alias
+    from: "承包人"
+    candidates:
+      - constructionUnit
+    confirm: true
+    source: S5
+    on: [T11]
+
+  # ===== aggregate（S4 / T7）=====
+  - id: agg.weeklyDone
+    target: weeklyDone
+    type: aggregate
+    from:
+      docs: { itemId: "二-10" }
+      dateWithin: week
+      field: todayWork
+    transform:
+      dedup: true
+      order: date
+      join: "；"
+    source: S4
+    on: [T7]
+    require: { minDocs: 1 }
+    fail: block
+
+  - id: agg.monthlyDone
+    target: monthlyDone
+    type: aggregate
+    from:
+      docs: { itemId: "二-11" }
+      dateWithin: month
+      field: weeklyDone
+    transform: { dedup: true, order: date, join: "；" }
+    source: S4
+    on: [T7]
+    require: { minDocs: 1 }
+    fail: block
+
+  # ===== statistic（S4 / T7）=====
+  - id: stat.weather
+    target: weather
+    type: statistic
+    from:
+      docs: { itemId: "二-10" }
+      dateWithin: week
+      field: weather
+    transform: { mode: countDays, template: "{value} {n} 天", join: " / " }
+    source: S4
+    on: [T7]
+
+  - id: stat.workerCount
+    target: workerCount
+    type: statistic
+    from:
+      docs: { itemId: "二-10" }
+      dateWithin: week
+      field: workerCount
+    transform: { mode: avgAndPeak, numberTemplate: "平均 {avg} 人，最多 {peak} 人" }
+    source: S4
+    on: [T7]
+
+  # ===== count（S4 / T7）=====
+  - id: cnt.trialRunBusiness
+    target: trialRunBusinessCount
+    type: count
+    from:
+      docs: { itemId: "五-06" }
+      table: trialRunList
+    transform: { mode: rows, excludeEmpty: true }
+    source: S4
+    on: [T7]
+
+  # ===== reference（S0）=====
+  - id: ref.docNo
+    target: docNo
+    type: reference
+    from: numbering.allocate(itemId)
+    source: S0
+    on: [T2, T3]
+    bind: permanent
+
+  # ===== condition（无合同编号 → 编号前缀降级）=====
+  - id: cond.noContract
+    target: docNo
+    type: condition
+    when: { empty: project.contractNo }
+    then: { "$docNo.prefix": "{abbr}" }
+    else: { "$docNo.prefix": "{contractNo}-{abbr}" }
+    source: S2
+    on: [T1]
+
+tables:
+  deviceList: { source: S1, path: "project._assets.devices" }
+  softwareList: { source: S1, path: "project._assets.softwares" }
+  testItemList: { source: S3, path: "project._assets.testItems" }
+  trialRunList: { source: S3, path: "project._assets.trialRuns" }
+  documentList: { source: S4, from: "catalog.docs" }
+  documentChecklist: { source: S4, from: "catalog.tree" }
+  volumeList: { source: S0, from: "catalog.volumes" }
+
 counters:
   weeklyWorkerCount: avgAndPeak
   logDedup: true

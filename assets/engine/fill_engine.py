@@ -108,19 +108,53 @@ def build_values(proj: dict, enabled: set, doc_rel: str) -> dict:
     return values
 
 
+def _flatten_plan_entry(entry: dict) -> dict:
+    """Pull {key: value} out of a FillPlan doc record (nested values{} or flat)."""
+    if not isinstance(entry, dict):
+        return {}
+    skip = {
+        'itemId', 'relPath', 'conflicts', 'missing', 'manualPending',
+        'derived', 'values', 'docId',
+    }
+    src = entry.get('values') if isinstance(entry.get('values'), dict) else entry
+    out = {}
+    for k, v in src.items():
+        if k in skip:
+            continue
+        if isinstance(v, dict) and 'value' in v:
+            val = v.get('value')
+        else:
+            val = v
+        if val not in (None, ''):
+            out[k] = val
+    return out
+
+
 def values_from_plan(plan: dict, doc_rel: str, fallback: dict) -> dict:
-    """Reuse a FillPlan when --plan is given (P1 shape; P0 accepts a flat map)."""
+    """Reuse a FillPlan when --plan is given (P1 shape; also accepts a flat map)."""
     if not plan:
         return fallback
     key = norm_rel(doc_rel)
-    docs = plan.get('documents') or plan.get('docs') or {}
-    if key in docs and isinstance(docs[key], dict):
+    extracted = {}
+    documents = plan.get('documents') or {}
+    if key in documents:
+        extracted = _flatten_plan_entry(documents[key])
+    if not extracted:
+        for rec in (plan.get('docs') or {}).values():
+            if isinstance(rec, dict) and norm_rel(rec.get('relPath') or '') == key:
+                extracted = _flatten_plan_entry(rec)
+                break
+    if not extracted and key in (plan.get('docs') or {}):
+        extracted = _flatten_plan_entry(plan['docs'][key])
+    if not extracted:
+        blob = plan.get('values') or plan.get('fields')
+        if isinstance(blob, dict):
+            extracted = _flatten_plan_entry({'values': blob} if any(
+                isinstance(v, dict) and 'value' in v for v in blob.values()
+            ) else blob)
+    if extracted:
         merged = dict(fallback)
-        merged.update({k: v for k, v in docs[key].items() if v not in (None, '')})
-        return merged
-    if isinstance(plan.get('values'), dict):
-        merged = dict(fallback)
-        merged.update({k: v for k, v in plan['values'].items() if v not in (None, '')})
+        merged.update(extracted)
         return merged
     return fallback
 
