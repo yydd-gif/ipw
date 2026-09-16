@@ -66,12 +66,14 @@ def scan_file(path: Path) -> list:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description='verify_engine · P0 residual scan')
-    ap.add_argument('--dir', type=Path, required=True, help='待校验目录')
+    ap.add_argument('--dir', type=Path, help='待校验目录')
     ap.add_argument('--dict', type=Path, default=DICT_PATH)
     ap.add_argument('--project', type=Path, help='给了才能做一致性校验（P2）')
     ap.add_argument('--level', choices=('block', 'all'), default='block')
     ap.add_argument('--json', action='store_true', dest='as_json')
     a = ap.parse_args()
+    if not a.dir:
+        return exit_param('需要 --dir', a.as_json, 'verify')
 
     if not a.dir.exists():
         return exit_param('校验目录不存在：%s' % a.dir, a.as_json, 'verify')

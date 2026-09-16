@@ -12,11 +12,13 @@ from _common import emit_progress, emit_result, exit_param, result_payload
 
 def main() -> int:
     ap = argparse.ArgumentParser(description='subtable_engine · P0 skeleton')
-    ap.add_argument('--doc', type=Path, required=True, help='目标 docx')
+    ap.add_argument('--doc', type=Path, help='目标 docx')
     ap.add_argument('--table', default='', help='子表 key（8 选 1，空则自动识别）')
     ap.add_argument('--data', type=Path, help='JSON/CSV 数据源')
     ap.add_argument('--json', action='store_true', dest='as_json')
     a = ap.parse_args()
+    if not a.doc:
+        return exit_param('需要 --doc', a.as_json, 'subtable')
 
     if not a.doc.exists():
         return exit_param('docx 不存在：%s' % a.doc, a.as_json, 'subtable')

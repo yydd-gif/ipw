@@ -12,8 +12,8 @@ from _common import TEMPLATES, emit_progress, emit_result, exit_param, result_pa
 
 def main() -> int:
     ap = argparse.ArgumentParser(description='docgen_engine · P0 skeleton')
-    ap.add_argument('--project', type=Path, required=True)
-    ap.add_argument('--item', required=True, help='all 或具体 itemId')
+    ap.add_argument('--project', type=Path)
+    ap.add_argument('--item', default='', help='all 或具体 itemId')
     ap.add_argument('--count', type=int, default=1)
     ap.add_argument('--mode', choices=('template', 'blank', 'upload', 'skip'),
                     default='template')
@@ -22,6 +22,8 @@ def main() -> int:
     ap.add_argument('--overwrite', action='store_true')
     ap.add_argument('--json', action='store_true', dest='as_json')
     a = ap.parse_args()
+    if not a.project or not a.item:
+        return exit_param('需要 --project / --item', a.as_json, 'docgen')
 
     if not a.project.exists():
         return exit_param('project.json 不存在：%s' % a.project, a.as_json, 'docgen')

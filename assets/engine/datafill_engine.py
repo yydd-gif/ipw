@@ -15,13 +15,15 @@ from _common import (
 
 def main() -> int:
     ap = argparse.ArgumentParser(description='datafill_engine · P0 skeleton')
-    ap.add_argument('--project', type=Path, required=True, help='project.json')
-    ap.add_argument('--out', type=Path, required=True, help='FillPlan 输出路径')
+    ap.add_argument('--project', type=Path, help='project.json')
+    ap.add_argument('--out', type=Path, help='FillPlan 输出路径')
     ap.add_argument('--dict', type=Path, default=DICT_PATH)
     ap.add_argument('--rules', type=Path, default=RULES_PATH)
     ap.add_argument('--only', default='', help='只算某个 itemId，如 二-01')
     ap.add_argument('--json', action='store_true', dest='as_json')
     a = ap.parse_args()
+    if not a.project or not a.out:
+        return exit_param('需要 --project / --out', a.as_json, 'datafill')
 
     if not a.project.exists():
         return exit_param('project.json 不存在：%s' % a.project, a.as_json, 'datafill')

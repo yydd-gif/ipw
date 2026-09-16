@@ -239,14 +239,19 @@ def main() -> int:
     for args, expect in skeleton_cmds:
         proc = run_cmd([sys.executable, str(ENGINE / args[0]), *args[1:]])
         name = args[0].replace('_engine.py', '') + ' ' + args[1] if len(args) > 1 else args[0]
-        ok = proc.returncode == expect
-        if '--json' in args and proc.returncode in (0, 1, 2, 3):
+        json_ok = True
+        if '--json' in args:
             try:
                 last_json_line(proc.stdout)
-            except Exception:
-                ok = False
+            except Exception as e:
+                json_ok = False
+                print('    !! JSON parse: %s' % e)
+                print('    stdout tail: %r' % ((proc.stdout or '')[-200:]))
+        ok = proc.returncode == expect and json_ok
         check(ok, 'cli %s' % args[0],
-              'exit %d (expect %d)' % (proc.returncode, expect), failures)
+              'exit %d (expect %d)%s' % (
+                  proc.returncode, expect,
+                  '' if json_ok else ' / --json last line invalid'), failures)
 
     if not a.skip_backup:
         print('\n-- backup SHA256 (known fail-loud)')

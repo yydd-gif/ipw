@@ -12,13 +12,15 @@ from _common import emit_progress, emit_result, exit_param, result_payload
 
 def main() -> int:
     ap = argparse.ArgumentParser(description='aggregate_engine · P0 skeleton')
-    ap.add_argument('--period', required=True, choices=('week', 'month'))
+    ap.add_argument('--period', default='', choices=('', 'week', 'month'))
     ap.add_argument('--from', dest='date_from', default='', help='YYYY-MM-DD')
     ap.add_argument('--to', dest='date_to', default='', help='YYYY-MM-DD')
-    ap.add_argument('--project', type=Path, required=True)
+    ap.add_argument('--project', type=Path)
     ap.add_argument('--out', type=Path)
     ap.add_argument('--json', action='store_true', dest='as_json')
     a = ap.parse_args()
+    if not a.period or not a.project:
+        return exit_param('需要 --period / --project', a.as_json, 'aggregate')
 
     if not a.project.exists():
         return exit_param('project.json 不存在：%s' % a.project, a.as_json, 'aggregate')
