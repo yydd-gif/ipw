@@ -4,7 +4,7 @@
 
 **建一个工程 = 建一个文件夹；点一次「一键成册」= 套完 37 份模板并填好 39 个字段。**
 
-当前进度：**P1 数据与规则**（P0 填充回归仍保持 37 份 / 171 处 / 0 残留）。
+当前进度：**P2 生成与校验闭环**（P0 填充回归仍保持 37 份 / 171 处 / 0 残留；P1 FillPlan 回归保持绿）。
 
 > 施工入口请先读 [`docs/00_交付说明.md`](docs/00_交付说明.md) 和 [`docs/设计文档/施工交接说明.md`](docs/设计文档/施工交接说明.md)，不要从设计文档第一页通读。
 
@@ -51,6 +51,30 @@ FillPlan 写入 `--out`（`sort_keys` 规范化 JSON）。同一输入跑两次�
 
 ---
 
+## 怎么跑 P2（生成与校验闭环）
+
+```bash
+python tools/run_p2_regression.py
+
+# 一键成册（56 项：37 套模板 + 19 无模板空白）
+python assets/engine/docgen_engine.py \
+  --project work/p2-booklet/project.json --item all --json
+
+# 编号（目录项内不重排：删掉 02，03 仍是 03）
+python assets/engine/numbering_engine.py \
+  --project work/p2-booklet/project.json --item 二-01 --json
+
+# 校验闸门（残留带 段N / 表M行R列C 定位）
+python assets/engine/verify_engine.py \
+  --dir work/p2-booklet --project work/p2-booklet/project.json --json
+```
+
+`docgen --item all` 默认跳过已生成的文档（重复点「生成全部」不重复）；`--item 二-01 --count 1` 在已有 01 时追加 02。无模板项三选一：`--mode blank|upload|skip`（默认 `template`，无模板时按 blank 落盘以保证 56 项都生成）。
+
+填充引擎 v1.0 默认 `--anchor on`：每个已填字段写 `yz_<key>` 书签 + `word/customXml/item1.xml` 台账。`--anchor off` 回到纯替换。缺值仍保留 `{{key}}`；日期不自动填。
+
+---
+
 ## 仓库布局（双轨制）
 
 按 [`施工交接说明.md` §5](docs/设计文档/施工交接说明.md) 落地：**安装资产只读 + 工程数据可拷走**。
@@ -60,10 +84,10 @@ assets/                         ← 安装资产（只读约定）
   templates/                    37 份现役模板（中文分册名，冻结；引擎不得写入）
   templates-backup/             注入后冻结副本 + SHA256清单.json
   spec/                         字段字典 / 表名缩写字典 / 填数规则.yaml（P1 正式 9 类规则）/ 软件目录.docx
-  engine/                       7 个确定性引擎（fill P0 可用；datafill P1 可用；其余骨架）
+  engine/                       7 个确定性引擎（fill/docgen/numbering/verify P2 可用；datafill P1）
   runtime/                      内嵌 Python 预留位（P7）
-lib/                            project.json 原子读写、字段字典、规则引擎
-tools/                          体检与回归脚本（stdlib only；含 run_p1_regression.py）
+lib/                            project.json 原子读写、字段字典、规则引擎、编号池
+tools/                          体检与回归脚本（stdlib only；含 run_p1_regression.py / run_p2_regression.py）
 docs/                           交付说明 + 设计文档 + 原始资料 + AI 组合包 + dsh 参考
 examples/demo_project.json      试跑工程数据
 src/                            Electron 壳预留（P4）
@@ -80,11 +104,11 @@ work/                           引擎输出（gitignore；永不指向 template
 
 | 脚本 | 状态 | 说明 |
 |---|---|---|
-| `assets/engine/fill_engine.py` | **P0 可用** | zip → XML → 按 infolist 写回；同段落跨 run 合并替换 |
+| `assets/engine/fill_engine.py` | **P2 v1.0** | zip → XML → 按 infolist 写回；FillPlan；`yz_` 书签 + customXml 锚点 |
 | `datafill_engine.py` | **P1 可用** | 9 类规则 → FillPlan；`--json` / exit 0/1/2/3 |
-| `docgen_engine.py` | P0 骨架 | P2 一键成册 |
-| `numbering_engine.py` | P0 骨架 | P2 编号（目录项内不重排） |
-| `verify_engine.py` | P0 残留扫描 | P2 补齐 §7 全量校验 |
+| `docgen_engine.py` | **P2 可用** | 一键成册 / 单份 / 追加 / 无模板三选一 / 编号绑定 |
+| `numbering_engine.py` | **P2 可用** | `{合同编号}-{表名缩写}-{流水号}`；删 02 不重排 03 |
+| `verify_engine.py` | **P2 可用** | §7 闸门；残留带 段N/表M行R列C |
 | `subtable_engine.py` | P0 骨架 | P5 八张子表 |
 | `aggregate_engine.py` | P0 骨架 | P6 日志→周报→月报 |
 

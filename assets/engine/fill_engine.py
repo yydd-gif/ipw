@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-验收资料编辑软件 · 填充引擎 v0.1（P0）
+验收资料编辑软件 · 填充引擎 v1.0（P2）
 
-职责：读 project.json + 字段字典，把模板里的 {{key}} 替换成实际值，
+职责：读 project.json + 字段字典（+ FillPlan），把模板里的 {{key}} 替换成实际值，
       输出到工程/工作目录。只读 templates，永不回写。
 
 工程约定：
@@ -11,6 +11,7 @@
   - 缺值不填空、保留 {{key}} 原样
   - 日期不自动填
   - 同段落跨 run 合并替换（splice）—— 实测 6 份模板 / 14 处被 Word 拆散
+  - --anchor on（默认）时同时写 yz_ 书签 + customXml 台账（ADR-9）
 
 用法：
   python assets/engine/fill_engine.py --demo
@@ -30,10 +31,23 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from _common import (
-    BASE, DICT_PATH, EXAMPLES, REPO, TEMPLATES, WORK,
-    TemplateProtectionError, assert_not_template_write, emit_progress,
+    ABBR_PATH, BASE, DICT_PATH, EXAMPLES, REPO, RULES_PATH, SPEC, TEMPLATES,
+    WORK, TemplateProtectionError, assert_not_template_write, emit_progress,
     emit_result, exit_env, exit_param, iter_templates, result_payload,
 )
+
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+
+YZ_NS = 'http://yanshou.local/field-anchors/1'
+DS_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/customXml'
+PKG_REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships'
+CT_NS = 'http://schemas.openxmlformats.org/package/2006/content-types'
+REL_CUSTOM_XML = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml'
+REL_CUSTOM_XML_PROPS = (
+    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps')
+YZ_GUID = '{8F3A1B2C-4D5E-6F70-8192-A3B4C5D6E7F8}'
+ANCHOR_ID_START = 9000
 
 # ---------------------------------------------------------------- 常量
 
@@ -190,8 +204,262 @@ def splice(runs, start: int, end: int, new_text: str) -> None:
             del el.attrib[XML_SPACE]
 
 
+def _clone_el(el):
+    n = ET.Element(el.tag, dict(el.attrib))
+    n.text = el.text
+    n.tail = el.tail
+    for ch in el:
+        n.append(_clone_el(ch))
+    return n
+
+
+def _walk_t(p):
+    """Yield (w:t, w:r, r_parent) for every w:t under paragraph p."""
+    def walk(el, parent, gp):
+        if el.tag == w('t'):
+            yield el, parent, gp
+        for ch in list(el):
+            yield from walk(ch, el, parent)
+    yield from walk(p, None, None)
+
+
+def _split_run_at(t, r, rp, local: int) -> None:
+    """Split a single-w:t run so text[:local] stays and text[local:] becomes the next run."""
+    text = t.text or ''
+    if local <= 0 or local >= len(text) or rp is None or r is None:
+        return
+    head, tail = text[:local], text[local:]
+    t.text = head
+    if head and head != head.strip():
+        t.set(XML_SPACE, 'preserve')
+    elif XML_SPACE in t.attrib and (not head or head == head.strip()):
+        del t.attrib[XML_SPACE]
+    new_r = ET.Element(r.tag, dict(r.attrib))
+    for ch in list(r):
+        if ch.tag == w('rPr'):
+            new_r.append(_clone_el(ch))
+            break
+    new_t = ET.Element(t.tag, dict(t.attrib))
+    new_t.text = tail
+    if tail != tail.strip():
+        new_t.set(XML_SPACE, 'preserve')
+    new_r.append(new_t)
+    idx = list(rp).index(r)
+    rp.insert(idx + 1, new_r)
+
+
+def wrap_range(p, start: int, end: int, b_id: int, b_name: str) -> None:
+    """Wrap concatenated-text [start, end) with a Word bookmark. Does not change visible text."""
+    if end <= start:
+        return
+    items = []
+    pos = 0
+    for t, r, rp in _walk_t(p):
+        txt = t.text or ''
+        items.append((t, r, rp, pos, pos + len(txt)))
+        pos += len(txt)
+    if not items:
+        return
+    # split trailing first so earlier offsets stay valid
+    for t, r, rp, s, e in reversed(items):
+        if s < end < e:
+            _split_run_at(t, r, rp, end - s)
+            break
+    items = []
+    pos = 0
+    for t, r, rp in _walk_t(p):
+        txt = t.text or ''
+        items.append((t, r, rp, pos, pos + len(txt)))
+        pos += len(txt)
+    for t, r, rp, s, e in items:
+        if s < start < e:
+            _split_run_at(t, r, rp, start - s)
+            break
+    cover = []
+    pos = 0
+    seen_r = []
+    for t, r, rp in _walk_t(p):
+        txt = t.text or ''
+        s, e = pos, pos + len(txt)
+        pos = e
+        if e <= start or s >= end:
+            continue
+        if r is not None and rp is not None and r not in seen_r:
+            cover.append((r, rp))
+            seen_r.append(r)
+    if not cover:
+        return
+    first_r, first_p = cover[0]
+    last_r, last_p = cover[-1]
+    bs = ET.Element(w('bookmarkStart'))
+    bs.set(w('id'), str(b_id))
+    bs.set(w('name'), b_name)
+    be = ET.Element(w('bookmarkEnd'))
+    be.set(w('id'), str(b_id))
+    fi = list(first_p).index(first_r)
+    first_p.insert(fi, bs)
+    if last_p is first_p:
+        li = list(last_p).index(last_r)
+        last_p.insert(li + 1, be)
+    else:
+        li = list(last_p).index(last_r)
+        last_p.insert(li + 1, be)
+
+
+class BookmarkAlloc:
+    def __init__(self, used_ids, used_names):
+        self.next_id = ANCHOR_ID_START
+        self.used_ids = set()
+        for i in used_ids:
+            try:
+                self.used_ids.add(int(i))
+            except (TypeError, ValueError):
+                pass
+        self.used_names = set(used_names or [])
+        self.key_n = {}
+
+    def alloc(self, key: str):
+        while self.next_id in self.used_ids:
+            self.next_id += 1
+        bid = self.next_id
+        self.next_id += 1
+        self.used_ids.add(bid)
+        n = self.key_n.get(key, 0) + 1
+        self.key_n[key] = n
+        name = 'yz_%s' % key if n == 1 else 'yz_%s_%d' % (key, n)
+        while name in self.used_names:
+            n += 1
+            name = 'yz_%s_%d' % (key, n)
+            self.key_n[key] = n
+        self.used_names.add(name)
+        return bid, name
+
+
+def collect_bookmarks(contents: dict):
+    ids, names = set(), set()
+    for part, raw in contents.items():
+        if not PART_RE.match(part):
+            continue
+        try:
+            root = ET.fromstring(raw)
+        except ET.ParseError:
+            continue
+        for el in root.iter(w('bookmarkStart')):
+            i = el.get(w('id'))
+            if i is None:
+                i = el.get('id')
+            n = el.get(w('name'))
+            if n is None:
+                n = el.get('name')
+            if i is not None:
+                try:
+                    ids.add(int(i))
+                except ValueError:
+                    pass
+            if n:
+                names.add(n)
+    return ids, names
+
+
+def slot_meta(plan, doc_rel: str, key: str):
+    if not plan:
+        return '', '', ''
+    rec = None
+    documents = plan.get('documents') or {}
+    if doc_rel in documents:
+        rec = documents[doc_rel]
+    if rec is None:
+        for r in (plan.get('docs') or {}).values():
+            if isinstance(r, dict) and norm_rel(r.get('relPath') or '') == norm_rel(doc_rel):
+                rec = r
+                break
+    slot = {}
+    if isinstance(rec, dict):
+        values = rec.get('values') if isinstance(rec.get('values'), dict) else rec
+        slot = values.get(key) or {}
+    if not slot:
+        slot = (plan.get('fields') or {}).get(key) or {}
+    if not isinstance(slot, dict):
+        return '', '', ''
+    return (str(slot.get('source') or ''), str(slot.get('ruleId') or ''),
+            str(slot.get('at') or slot.get('resolvedAt') or ''))
+
+
+def _ledger_xml(ledger: dict) -> bytes:
+    payload = json.dumps(ledger, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+    payload = payload.replace(']]>', ']]]]><![CDATA[>')
+    body = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<yz:ledger xmlns:yz="%s"><![CDATA[%s]]></yz:ledger>' % (YZ_NS, payload)
+    )
+    return body.encode('utf-8')
+
+
+def _item_props_xml() -> bytes:
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<ds:datastoreItem ds:itemID="%s" xmlns:ds="%s">'
+        '<ds:schemaRefs><ds:schemaRef ds:uri="%s"/></ds:schemaRefs>'
+        '</ds:datastoreItem>' % (YZ_GUID, DS_NS, YZ_NS)
+    ).encode('utf-8')
+
+
+def _item_rels_xml() -> bytes:
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="%s">'
+        '<Relationship Id="rId1" Type="%s" Target="itemProps1.xml"/>'
+        '</Relationships>' % (PKG_REL_NS, REL_CUSTOM_XML_PROPS)
+    ).encode('utf-8')
+
+
+def _ensure_ct_override(raw: bytes, part: str, ctype: str) -> bytes:
+    if part.encode('ascii') in raw:
+        return raw
+    snippet = (
+        '<Override PartName="%s" ContentType="%s"/>' % (part, ctype)
+    ).encode('ascii')
+    if b'</Types>' in raw:
+        return raw.replace(b'</Types>', snippet + b'</Types>', 1)
+    return raw
+
+
+def _ensure_root_rel(raw: bytes, rid: str, target: str) -> bytes:
+    if target.encode('ascii') in raw:
+        return raw
+    snippet = (
+        '<Relationship Id="%s" Type="%s" Target="%s"/>'
+        % (rid, REL_CUSTOM_XML, target)
+    ).encode('ascii')
+    if b'</Relationships>' in raw:
+        return raw.replace(b'</Relationships>', snippet + b'</Relationships>', 1)
+    return raw
+
+
+def inject_custom_xml(contents: dict, ledger: dict) -> None:
+    if not ledger:
+        return
+    contents['customXml/item1.xml'] = _ledger_xml(ledger)
+    contents['customXml/itemProps1.xml'] = _item_props_xml()
+    contents['customXml/_rels/item1.xml.rels'] = _item_rels_xml()
+    ct = contents.get('[Content_Types].xml')
+    if ct:
+        ct = _ensure_ct_override(
+            ct, '/customXml/item1.xml', 'application/xml')
+        ct = _ensure_ct_override(
+            ct, '/customXml/itemProps1.xml',
+            'application/vnd.openxmlformats-officedocument.customXmlProperties+xml')
+        contents['[Content_Types].xml'] = ct
+    rels = contents.get('_rels/.rels')
+    if rels:
+        contents['_rels/.rels'] = _ensure_root_rel(
+            rels, 'rIdYzAnchors', 'customXml/item1.xml')
+
+
 def fill_part(raw: bytes, values: dict, meta: dict, enabled: set,
-              records: list, doc_rel: str, part_name: str) -> bytes:
+              records: list, doc_rel: str, part_name: str,
+              alloc: BookmarkAlloc | None = None, ledger: dict | None = None,
+              plan: dict | None = None) -> bytes:
     try:
         register_ns(raw)
         root = ET.fromstring(raw)
@@ -206,7 +474,9 @@ def fill_part(raw: bytes, values: dict, meta: dict, enabled: set,
         if '{{' not in full:
             continue
 
-        for m in reversed(list(PH_RE.finditer(full))):
+        orig_matches = list(PH_RE.finditer(full))
+        for m in reversed(orig_matches):
+            runs = [el for el in p.iter(w('t'))]
             raw_key = m.group(1).strip()
             ctx = full[max(0, m.start() - 18):m.end() + 18].replace('\n', ' ')
             fld = meta.get(raw_key)
@@ -229,6 +499,14 @@ def fill_part(raw: bytes, values: dict, meta: dict, enabled: set,
             splice(runs, m.start(), m.end(), str(val))
             records.append(rec(doc_rel, part_name, raw_key, '已填充',
                                str(val), ctx, fld.get('label', '')))
+            if alloc is not None:
+                bid, bname = alloc.alloc(raw_key)
+                wrap_range(p, m.start(), m.start() + len(str(val)), bid, bname)
+                if ledger is not None:
+                    src, rid, at = slot_meta(plan, doc_rel, raw_key)
+                    ledger[bname] = {
+                        'value': str(val), 'source': src, 'ruleId': rid, 'at': at,
+                    }
 
     body = ET.tostring(root, encoding='utf-8', xml_declaration=False)
     dm = DECL_RE.match(raw)
@@ -245,24 +523,41 @@ def rec(doc, part, key, status, value, ctx, label=''):
 # ---------------------------------------------------------------- 文档处理
 
 def process_docx(src: Path, dst: Path, values: dict, meta: dict, enabled: set,
-                 records: list, doc_rel: str) -> int:
+                 records: list, doc_rel: str, anchor: str = 'off',
+                 plan: dict | None = None) -> int:
     assert_not_template_write(dst)
     with zipfile.ZipFile(src) as zin:
         items = zin.infolist()
         contents = {it.filename: zin.read(it.filename) for it in items}
 
+    alloc = None
+    ledger = None
+    if anchor == 'on':
+        used_ids, used_names = collect_bookmarks(contents)
+        alloc = BookmarkAlloc(used_ids, used_names)
+        ledger = {}
+
     touched = 0
+    written = set()
     for name in list(contents):
         if PART_RE.match(name):
             before = len(records)
-            contents[name] = fill_part(contents[name], values, meta, enabled,
-                                       records, doc_rel, name)
+            contents[name] = fill_part(
+                contents[name], values, meta, enabled, records, doc_rel, name,
+                alloc=alloc, ledger=ledger, plan=plan)
             touched += sum(1 for r in records[before:] if r['状态'] == '已填充')
+
+    if ledger:
+        inject_custom_xml(contents, ledger)
 
     dst.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(dst, 'w', zipfile.ZIP_DEFLATED) as zout:
         for it in items:
             zout.writestr(it, contents[it.filename])
+            written.add(it.filename)
+        for name, data in contents.items():
+            if name not in written:
+                zout.writestr(name, data)
     return touched
 
 
@@ -307,6 +602,24 @@ def empty_out_dir(out_dir: Path) -> None:
 
 # ---------------------------------------------------------------- 主流程
 
+def compute_fillplan(proj: dict) -> dict | None:
+    """Runtime FillPlan (规格 §3.3 --plan 默认「运行时算」). Fail soft → None."""
+    try:
+        from lib.field_dict import load_field_dict
+        from lib.rule_engine import load_catalog, load_rule_set, resolve_fillplan
+        dict_path = DICT_PATH
+        rules_path = RULES_PATH
+        if not dict_path.exists() or not rules_path.exists():
+            return None
+        field_dict = load_field_dict(dict_path)
+        rule_set = load_rule_set(rules_path, field_dict)
+        alias_path = SPEC / '分册别名表.csv'
+        catalog = load_catalog(ABBR_PATH, alias_path)
+        return resolve_fillplan(proj, field_dict, rule_set, catalog=catalog)
+    except Exception:
+        return None
+
+
 def run(project_path: Path, templates: Path, out_dir: Path, report_path: Path,
         as_json: bool = False, plan: dict | None = None, anchor: str = 'off') -> int:
     try:
@@ -327,6 +640,9 @@ def run(project_path: Path, templates: Path, out_dir: Path, report_path: Path,
     proj = json.loads(project_path.read_text(encoding='utf-8'))
     data, meta, enabled = load_dict(dict_path)
 
+    if plan is None:
+        plan = compute_fillplan(proj)
+
     docs = list(iter_templates(templates))
     if not docs:
         return exit_env('模板目录里没找到 docx：%s' % templates, as_json, 'fill')
@@ -342,7 +658,8 @@ def run(project_path: Path, templates: Path, out_dir: Path, report_path: Path,
         if plan is not None:
             values = values_from_plan(plan, doc_rel, values)
         dst = out_dir / src.relative_to(templates)
-        n = process_docx(src, dst, values, meta, enabled, records, doc_rel)
+        n = process_docx(src, dst, values, meta, enabled, records, doc_rel,
+                         anchor=anchor, plan=plan)
         filled_total += n
         emit_progress(i, total, doc_rel)
         if not as_json:
@@ -388,6 +705,7 @@ def run(project_path: Path, templates: Path, out_dir: Path, report_path: Path,
             'unknown': len(unknown),
             'dateDisabled': date_disabled,
             'anchor': anchor,
+            'anchors': filled_total if anchor == 'on' else 0,
         },
         items=[{'file': r['文件'], 'key': r['key'], 'status': r['状态']}
                for r in records if r['状态'] == '已填充'][:],
@@ -396,7 +714,7 @@ def run(project_path: Path, templates: Path, out_dir: Path, report_path: Path,
 
     if not as_json:
         print('\n' + '=' * 62)
-        print('填充引擎 v0.1  报告')
+        print('填充引擎 v1.0  报告')
         print('=' * 62)
         print('  字典          %s  (v%s / 启用 %d 字段)' % (
             rel(dict_path), data.get('version'), len(enabled)))
@@ -413,7 +731,9 @@ def run(project_path: Path, templates: Path, out_dir: Path, report_path: Path,
             '（应为 0，未填字段按约定保留→见缺值）' if residual else ''))
         print('  报告           %s' % rel(report_path))
         if anchor == 'on':
-            print('  锚点           P0 跳过写入（P2 实现 yz_ 书签 / customXml）')
+            print('  锚点           yz_ 书签 + customXml 台账（%d 处）' % filled_total)
+        else:
+            print('  锚点           关闭')
         print('=' * 62)
         print(summary)
 
@@ -441,14 +761,14 @@ def demo(as_json: bool = False, anchor: str = 'off') -> int:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description='验收资料填充引擎 v0.1（P0）')
+    ap = argparse.ArgumentParser(description='验收资料填充引擎 v1.0（P2）')
     ap.add_argument('--demo', action='store_true', help='用 examples/demo_project.json 试跑')
     ap.add_argument('--project', type=Path, help='project.json 路径')
     ap.add_argument('--templates', type=Path, default=TEMPLATES, help='模板目录')
     ap.add_argument('--out', type=Path, help='输出工程目录')
     ap.add_argument('--plan', type=Path, help='复用已有 FillPlan（保证与预览一致）')
     ap.add_argument('--anchor', choices=('on', 'off'), default='on',
-                    help='是否写入字段锚点（P0 接受参数但不落书签，P2 实现）')
+                    help='是否写入字段锚点（yz_ 书签 + customXml）')
     ap.add_argument('--report', type=Path, help='报告 CSV 路径')
     ap.add_argument('--json', action='store_true', dest='as_json', help='输出契约 JSON')
     a = ap.parse_args()

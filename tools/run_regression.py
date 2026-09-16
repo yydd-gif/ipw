@@ -23,6 +23,7 @@ import subprocess
 import sys
 import zipfile
 from pathlib import Path
+import shutil
 
 TOOLS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS))
@@ -224,13 +225,19 @@ def main() -> int:
     except TemplateProtectionError:
         check(True, 'template protection', 'TemplateProtectionError', failures)
 
-    # CLI skeletons: --json last line + missing-arg exit 2
-    print('\n-- engine skeletons')
+    # CLI: --json last line + missing-arg exit 2
+    # docgen/numbering write project.json — use a sandbox copy so examples/ stays clean.
+    print('\n-- engine CLI')
     demo = EXAMPLES / 'demo_project.json'
+    sandbox = WORK / 'p0-cli-sandbox'
+    sandbox.mkdir(parents=True, exist_ok=True)
+    sandbox_pj = sandbox / 'project.json'
+    shutil.copy2(demo, sandbox_pj)
     skeleton_cmds = [
         (['datafill_engine.py', '--project', str(demo), '--out', str(WORK / 'fillplan.json'), '--json'], 0),
-        (['docgen_engine.py', '--project', str(demo), '--item', 'all', '--json'], 0),
-        (['numbering_engine.py', '--project', str(demo), '--item', '二-01', '--json'], 0),
+        (['docgen_engine.py', '--project', str(sandbox_pj), '--item', '二-01',
+          '--out', str(sandbox), '--json'], 0),
+        (['numbering_engine.py', '--project', str(sandbox_pj), '--item', '二-02', '--json'], 0),
         (['aggregate_engine.py', '--period', 'week', '--project', str(demo), '--json'], 0),
         (['subtable_engine.py', '--doc', str(templates[0]), '--json'], 0),
         (['verify_engine.py', '--dir', str(out_dir), '--json'], 0),
