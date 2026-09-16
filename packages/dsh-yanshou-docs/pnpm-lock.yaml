@@ -18,7 +18,7 @@ importers:
         specifier: latest
         version: 7.0.2
       unrun:
-        specifier: ^0.3.1
+        specifier: 0.3.1
         version: 0.3.1
 
 packages:

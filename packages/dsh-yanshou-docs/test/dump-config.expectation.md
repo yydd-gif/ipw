@@ -31,8 +31,16 @@
   name: '@deepseek-ai/dsh-sdk-jsonrpc-server'
 ```
 
-## 本包覆盖后不应再出现
+## 本包覆盖后的胜出行（后层按行胜出）
 
-- `personaPrefix: You are a coding agent powered by the {{model}} model.`
-- `model: deepseek-chat`
-- 任何 `sk-` / `apiKey:` 明文
+`--dump-config` 打印的是**叠层树**，sdk-app 那一层里仍会出现 “You are a coding agent…”。
+判定看 **`# == dsh-yanshou-docs` 之后**的行：
+
+- `id: system-prompt` → `personaPrefix` 含「验收资料助手」
+- `id: agent-default-model` → `model: deepseek-flash`
+- 该层内没有 `model: deepseek-chat`
+
+## 整棵树里仍可能出现（不算失败）
+
+- 更早层的 `personaPrefix: You are a coding agent powered by the {{model}} model.`
+

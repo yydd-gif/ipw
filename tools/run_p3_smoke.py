@@ -106,7 +106,8 @@ def static_contract(failures: list) -> dict:
     check('installRoot' in patch and 'workspaceRoot' in patch,
           'dual-track paths', 'installRoot+workspaceRoot', failures)
     check('deepseek-flash' in patch, 'legal model name', 'deepseek-flash', failures)
-    check('deepseek-chat' not in patch, 'no model alias', 'deepseek-chat absent', failures)
+    check('model: deepseek-chat' not in patch and 'model: deepseek-reasoner' not in patch,
+          'no model alias as config value', 'only flash/v4-pro', failures)
     check('You are a coding agent' not in patch, 'persona not coding-agent', 'overridden', failures)
     check('验收资料助手' in patch, 'persona is docs assistant', 'prefix present', failures)
     check('danger-full-access' not in patch,
@@ -331,12 +332,19 @@ def maybe_dsh(failures: list, tgz: Path | None) -> None:
           'present' if 'id: yanshou-docs' in out else 'NOT present', failures)
     check('sdk-jsonrpc-server' in out, 'dump-config jsonrpc server',
           'present' if 'sdk-jsonrpc-server' in out else 'NOT present', failures)
-    check('You are a coding agent' not in out,
-          'dump-config persona replaced',
-          'coding agent absent' if 'You are a coding agent' not in out else 'STILL coding agent',
+    # dump-config prints the stacked tree: earlier sdk-app layer still contains
+    # "coding agent". Winning row is the last layer (后层按行胜出).
+    last = out.split('# == dsh-yanshou-docs')[-1] if '# == dsh-yanshou-docs' in out else ''
+    check('验收资料助手' in last, 'dump-config winning persona (last layer)',
+          'docs assistant' if '验收资料助手' in last else 'NOT in last layer', failures)
+    check('You are a coding agent' not in last,
+          'dump-config last layer is not coding-agent',
+          'ok' if 'You are a coding agent' not in last else 'last layer still coding agent',
           failures)
-    check('deepseek-chat' not in out, 'dump-config no model alias',
-          'ok' if 'deepseek-chat' not in out else 'alias leaked', failures)
+    check('model: deepseek-chat' not in last, 'dump-config no model alias in last layer',
+          'ok' if 'model: deepseek-chat' not in last else 'alias leaked', failures)
+    check('model: deepseek-flash' in last, 'dump-config last layer model',
+          'deepseek-flash' if 'model: deepseek-flash' in last else 'missing', failures)
 
     # keep a copy under work/ (gitignored) for humans; do not treat as source
     try:

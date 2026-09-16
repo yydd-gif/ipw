@@ -50,7 +50,7 @@
       name: '@deepseek-ai/dsh-agent-default-model'
       config:
         provider: deepseek-official
-        model: deepseek-flash          # 只写合法名，不写 deepseek-chat 别名
+        model: deepseek-flash          # 只写合法名，不用 chat/reasoner 别名
 
     # ── 系统提示词（覆盖 dsh-sdk-app 改过的那一行，必须重述整行）─────
     - id: system-prompt

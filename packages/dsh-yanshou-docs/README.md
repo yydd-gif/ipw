@@ -90,7 +90,7 @@ dsh --profile yanshou --dump-config
 
 ### `--dump-config` 期望（真跑才算数）
 
-输出里应出现：
+`--dump-config` 打印叠层树：sdk-app 层里仍会看到 “coding agent”。**胜出行**在最后的 `# == dsh-yanshou-docs` 层：
 
 ```yaml
 # == dsh-yanshou-docs
