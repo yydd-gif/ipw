@@ -31,6 +31,21 @@ function $(id) { return document.getElementById(id); }
 function show(id) { $(id).classList.remove('hidden'); }
 function hide(id) { $(id).classList.add('hidden'); }
 
+let toastTimer = null;
+function toast(msg) {
+  let el = $('toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'toast';
+    el.className = 'toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = String(msg || '');
+  el.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('on'), 2800);
+}
+
 function setDirty(n) {
   state.dirty = n > 0;
   $('dirtyMark').classList.toggle('hidden', !state.dirty);

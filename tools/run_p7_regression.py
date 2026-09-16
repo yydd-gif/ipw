@@ -25,6 +25,7 @@ import sys
 from pathlib import Path
 
 TOOLS = Path(__file__).resolve().parent
+SOURCE = TOOLS.parent  # git checkout even when YANSHOU_ROOT points at a pack
 sys.path.insert(0, str(TOOLS))
 from _paths import ENGINE, REPO, TEMPLATES, WORK  # noqa: E402
 
@@ -48,7 +49,7 @@ def run(args, cwd=None, timeout=180, env=None) -> subprocess.CompletedProcess:
         e.update(env)
     e.setdefault('PYTHONUTF8', '1')
     return subprocess.run(
-        args, cwd=cwd or str(REPO), env=e, timeout=timeout,
+        args, cwd=cwd or str(SOURCE), env=e, timeout=timeout,
         capture_output=True, text=True, encoding='utf-8',
     )
 
@@ -112,8 +113,12 @@ def test_no_template_write(failures: list) -> None:
 
 def test_pack_config(failures: list) -> None:
     print('\n-- pack config')
-    yml = (REPO / 'electron-builder.yml').read_text(encoding='utf-8')
-    pkg = json.loads((REPO / 'package.json').read_text(encoding='utf-8'))
+    yml_path = SOURCE / 'electron-builder.yml'
+    if not yml_path.is_file():
+        print('  [SKIP] pack config (no electron-builder.yml in this tree)')
+        return
+    yml = yml_path.read_text(encoding='utf-8')
+    pkg = json.loads((SOURCE / 'package.json').read_text(encoding='utf-8'))
     check('nsis' in yml and 'portable' in yml and 'zip' in yml,
           'win targets nsis+zip+portable', 'electron-builder.yml', failures)
     check('linux:' in yml and 'dir' in yml, 'linux dir+zip', 'present', failures)
@@ -128,22 +133,22 @@ def test_pack_config(failures: list) -> None:
         check(key in scripts, 'npm script ' + key, scripts.get(key) or 'missing', failures)
     check(pkg.get('version', '').startswith('0.7'), 'version 0.7.x',
           pkg.get('version'), failures)
-    check((REPO / 'docs' / '使用手册.md').is_file(), 'user manual',
+    check((SOURCE / 'docs' / '使用手册.md').is_file(), 'user manual',
           'docs/使用手册.md', failures)
-    check((REPO / 'docs' / '打包说明.md').is_file(), 'pack docs',
+    check((SOURCE / 'docs' / '打包说明.md').is_file(), 'pack docs',
           'docs/打包说明.md', failures)
     check('electron-builder' in (pkg.get('devDependencies') or {}),
           'electron-builder dep', str((pkg.get('devDependencies') or {}).get('electron-builder')),
           failures)
-    rt = (REPO / 'src' / 'runtime.js').read_text(encoding='utf-8')
-    check('findPython' in rt and 'python.exe' in rt, 'runtime.js win python',
-          'findPython', failures)
+    check('findPython' in (SOURCE / 'src' / 'runtime.js').read_text(encoding='utf-8')
+          and 'python.exe' in (SOURCE / 'src' / 'runtime.js').read_text(encoding='utf-8'),
+          'runtime.js win python', 'findPython', failures)
 
 
 def test_no_secrets(failures: list) -> None:
     print('\n-- no secrets')
-    roots = [REPO / 'src', REPO / 'assets', REPO / 'lib', REPO / 'tools',
-             REPO / 'scripts', REPO / 'docs', REPO / 'packages', REPO / '.github']
+    roots = [SOURCE / 'src', SOURCE / 'assets', SOURCE / 'lib', SOURCE / 'tools',
+             SOURCE / 'scripts', SOURCE / 'docs', SOURCE / 'packages', SOURCE / '.github']
     pat = re.compile(r'sk-[A-Za-z0-9]{12,}')
     hits = []
     for root in roots:
@@ -161,9 +166,9 @@ def test_no_secrets(failures: list) -> None:
             except OSError:
                 continue
             if pat.search(text):
-                hits.append(str(p.relative_to(REPO)))
+                hits.append(str(p.relative_to(SOURCE)))
     check(not hits, 'no sk- api keys in tree', hits[:5] or 'clean', failures)
-    patch = REPO / 'packages' / 'dsh-yanshou-docs' / 'cordis.patch.yml'
+    patch = SOURCE / 'packages' / 'dsh-yanshou-docs' / 'cordis.patch.yml'
     if patch.is_file():
         t = patch.read_text(encoding='utf-8')
         check('sk-' not in t, 'patch has no key', 'ok', failures)
@@ -183,8 +188,8 @@ def test_offline_docs_and_gate(failures: list) -> None:
     st = data.get('stats') or data
     check(st.get('available') is False, 'AI unavailable when unplugged',
           str(st.get('reason')), failures)
-    manual = (REPO / 'docs' / '使用手册.md').read_text(encoding='utf-8')
-    pack = (REPO / 'docs' / '打包说明.md').read_text(encoding='utf-8')
+    manual = (SOURCE / 'docs' / '使用手册.md').read_text(encoding='utf-8')
+    pack = (SOURCE / 'docs' / '打包说明.md').read_text(encoding='utf-8')
     check('断网' in manual or '离线' in manual, 'manual mentions offline',
           '使用手册', failures)
     check('dsh' in pack.lower() and '420' in pack, 'pack docs dsh optional size',
@@ -207,7 +212,7 @@ const env = pythonEnv('/tmp/yz-res', '/tmp/yz-work', { FOO: '1' });
 if (env.YANSHOU_ROOT !== '/tmp/yz-res' || env.YANSHOU_WORK !== '/tmp/yz-work') process.exit(2);
 console.log(JSON.stringify({ ok: true, root, py, pythonpath: env.PYTHONPATH }));
 """
-    proc = run(['node', '-e', script])
+    proc = run(['node', '-e', script], cwd=str(SOURCE))
     check(proc.returncode == 0, 'runtime.js node smoke',
           (proc.stderr or proc.stdout or '')[-200:], failures)
 
