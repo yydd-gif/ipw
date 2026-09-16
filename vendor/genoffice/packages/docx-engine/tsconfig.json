@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "paths": {
+      "@genoffice/pptx-engine/custgeom": ["../pptx-engine/src/custgeom.ts"]
+    }
+  },
+  "include": ["src"]
+}

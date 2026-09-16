@@ -27,6 +27,10 @@ contextBridge.exposeInMainWorld('api', {
   aggregate: (opts) => ipcRenderer.invoke('aggregate', opts),
   health: () => ipcRenderer.invoke('health'),
   openManual: () => ipcRenderer.invoke('open-manual'),
+  editorStatus: () => ipcRenderer.invoke('editor-status'),
+  editorOpen: (opts) => ipcRenderer.invoke('editor-open', opts),
+  editorSave: (opts) => ipcRenderer.invoke('editor-save', opts),
+  editorClose: (id) => ipcRenderer.invoke('editor-close', id),
   onProgress: (cb) => {
     const fn = (_e, line) => cb(line);
     ipcRenderer.on('engine-progress', fn);

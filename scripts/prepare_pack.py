@@ -62,12 +62,20 @@ def vendor_pypdf() -> None:
 
 
 def write_manifest(platform: str, with_runtime: bool, runtime_kind: str) -> dict:
+    fid = {'editorMode': 'E1'}
+    fp = ROOT / 'src' / 'fidelity-status.json'
+    if fp.is_file():
+        try:
+            fid = json.loads(fp.read_text(encoding='utf-8'))
+        except json.JSONDecodeError:
+            pass
     data = {
         'product': '验收资料编辑软件',
         'name': 'yanshou-docs',
         'version': json.loads((ROOT / 'package.json').read_text(encoding='utf-8'))['version'],
         'builtAt': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
-        'editorMode': 'E1',
+        'editorMode': fid.get('editorMode') or 'E1',
+        'fidelity': {k: fid.get(k) for k in ('v1', 'v2', 'v3', 'v4', 'editorMode')},
         'includes': {
             'electronShell': True,
             'engines': True,

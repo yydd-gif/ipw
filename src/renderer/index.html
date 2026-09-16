@@ -11,7 +11,7 @@
     <span class="appdot"></span>
     <span class="title-text" id="titleText">验收资料编辑软件 — 未打开工程</span>
     <span class="dirty hidden" id="dirtyMark">*</span>
-    <span class="winbtns">P7 E1</span>
+    <span class="winbtns">P7 · 嵌入编辑</span>
   </div>
   <div class="banner" id="modeBanner">编辑内核：E1 表单 + 只读预览（V3 保真写回未放行）</div>
   <div class="menubar">
@@ -80,10 +80,12 @@
     <div class="right">
       <div class="editor-toolbar">
         <button class="etab on" data-view="preview">预览</button>
+        <button class="etab" data-view="edit">正文</button>
         <button class="etab" data-view="ledger">台账</button>
         <button class="etab" data-view="tables">子表</button>
         <button class="etab" data-view="jobs">作业</button>
         <span class="tool-sp">
+          <button class="mini-btn" id="btnSaveDocx" title="保存当前正文到工程副本，不写模板">保存正文</button>
           <button class="mini-btn" id="btnPanel">面板 ◀</button>
         </span>
       </div>
@@ -147,7 +149,7 @@
     <div class="dlg-h">关于</div>
     <div class="dlg-b">
       <p><b>验收资料的自动生成与管理系统，内建够用的文档编辑能力。</b></p>
-      <p>不是 Office 替代品。P7：E1 表单 + 子表网格 + 日志→周报/月报 + 可选 AI。安装包 / 免安装包内嵌引擎与模板；干净 Windows 不要求系统 Python / Node。V3 保真写回未放行，不做 E2/E3 内核。凭据只走 DEEPSEEK_API_KEY 环境变量；断网或无 Key 时 AI 入口全部置灰。</p>
+      <p>不是 Office 替代品。工程文档可在右侧「正文」里改正文和表格文字并写回工程副本；模板资产只读。E1 表单 + 只读预览始终可用。凭据只走 DEEPSEEK_API_KEY 环境变量；断网或无 Key 时 AI 入口全部置灰。</p>
       <p id="aboutFidelity"></p>
     </div>
     <div class="dlg-f"><button class="btn pri" data-close="dlgAbout">关闭</button></div>

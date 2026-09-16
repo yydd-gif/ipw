@@ -26,6 +26,8 @@ jobs:
         run: python tools/run_p7_regression.py --skip-pack --skip-prior
       - name: npm install
         run: npm install
+      - name: GenOffice embed typecheck + V2/V3
+        run: python tools/run_embed_regression.py --skip-prior
       - name: Linux dir + zip
         run: npm run pack:linux
       - name: P7 against extraResources

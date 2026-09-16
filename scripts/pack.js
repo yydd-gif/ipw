@@ -51,6 +51,8 @@ if (!fs.existsSync(path.join(ROOT, 'node_modules', 'electron-builder'))) {
   process.exit(1);
 }
 
+run(process.execPath, [path.join(ROOT, 'packages', 'docx-embed', 'build.mjs')]);
+
 const ebArgs = [];
 if (wantWin) {
   if (dirOnly) ebArgs.push('--win', 'dir');

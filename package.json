@@ -1,14 +1,19 @@
 {
   "name": "yanshou-docs",
   "productName": "验收资料编辑软件",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
-  "description": "P7 Electron E1 shell — packaged engines/templates + portable Python (no genoffice, dsh runtime optional)",
+  "description": "P7 shell + source-integrated GenOffice DOCX embed (E1 fallback)",
   "main": "src/main.js",
   "type": "commonjs",
   "scripts": {
     "dev": "electron .",
     "start": "electron .",
+    "prepare": "node packages/docx-embed/build.mjs",
+    "embed:build": "node packages/docx-embed/build.mjs",
+    "embed:typecheck": "tsc --noEmit -p vendor/genoffice/packages/pptx-engine && tsc --noEmit -p vendor/genoffice/packages/docx-engine && tsc --noEmit -p packages/docx-embed",
+    "embed:gate": "node tools/run_embed_gate.mjs",
+    "embed:smoke": "python3 tools/run_embed_regression.py",
     "p4:gate": "python3 tools/run_p4_gate.py",
     "p4:smoke": "python3 tools/run_p4_smoke.py",
     "p5:smoke": "python3 tools/run_p5_regression.py",
@@ -23,8 +28,16 @@
   "engines": {
     "node": ">=22.14"
   },
+  "dependencies": {
+    "fast-xml-parser": "^5.3.4",
+    "jszip": "^3.10.1",
+    "utif2": "^4.1.0"
+  },
   "devDependencies": {
+    "@types/node": "^24.10.1",
     "electron": "^33.2.1",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.25.9",
+    "typescript": "^5.9.3"
   }
 }

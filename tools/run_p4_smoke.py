@@ -73,15 +73,25 @@ def main() -> int:
               str(data.get('v2')), failures)
         check(data.get('v3') in ('PASS', 'BLOCKED', 'FAIL', 'PARTIAL'), 'V3 recorded honestly',
               str(data.get('v3')), failures)
-        check(data.get('editorMode') == 'E1' or data.get('v3') == 'PASS',
-              'editorMode matches V3', '%s / V3=%s' % (data.get('editorMode'), data.get('v3')),
+        check(data.get('editorMode') in ('E1', 'genoffice-embed', 'genoffice'),
+              'editorMode recorded',
+              '%s / V3=%s' % (data.get('editorMode'), data.get('v3')),
               failures)
         check(data.get('v4') == 'PASS', 'V4 PDF', str(data.get('v4')), failures)
+        if data.get('v3') == 'PASS':
+            check(data.get('editorMode') in ('genoffice-embed', 'genoffice'),
+                  'V3 PASS → embedded editor mode',
+                  str(data.get('editorMode')), failures)
+        else:
+            check(data.get('editorMode') == 'E1',
+                  'V3 not PASS → E1 fallback',
+                  '%s / V3=%s' % (data.get('editorMode'), data.get('v3')),
+                  failures)
         if data.get('v1') == 'BLOCKED':
             check(data.get('editorMode') == 'E1', 'V1 blocked → E1 shell',
                   str(data.get('editorMode')), failures)
-            check(data.get('v3') == 'BLOCKED',
-                  'do not claim V3 PASS when npm add failed',
+            check(data.get('v3') != 'PASS',
+                  'do not claim V3 PASS when source V1 blocked',
                   str(data.get('v3')), failures)
 
     print('\n-- shell_bridge create / save / print persist')
