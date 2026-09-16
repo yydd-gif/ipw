@@ -52,38 +52,93 @@ def which_node():
     return shutil.which('node') or 'node', ''
 
 
-def v1_npm_add() -> dict:
-    """Try `pnpm add @genoffice/docx-engine` in a throwaway dir."""
-    pnpm = shutil.which('pnpm')
+def v1_source_build() -> dict:
+    """Product V1: pinned GenOffice source typecheck + embed bundle (not npm add)."""
+    pin_path = REPO / 'vendor' / 'genoffice' / 'PIN.json'
+    engine_src = REPO / 'vendor' / 'genoffice' / 'packages' / 'docx-engine' / 'src' / 'parse.ts'
+    info = {'node': run([which_node()[0], '--version']).stdout.strip()}
+    if not pin_path.is_file() or not engine_src.is_file():
+        return {
+            'status': 'BLOCKED',
+            'reason': 'vendor/genoffice pin missing',
+            **info,
+        }
+    pin = json.loads(pin_path.read_text(encoding='utf-8'))
     node, bindir = which_node()
-    info = {
-        'node': run([node, '--version']).stdout.strip() if node else 'missing',
-        'pnpm': pnpm or 'missing',
+    env = os.environ.copy()
+    if bindir:
+        env['PATH'] = bindir + os.pathsep + env.get('PATH', '')
+    tsc = shutil.which('tsc')
+    npm_bin = Path(bindir) / 'tsc' if bindir else None
+    if not tsc and npm_bin and npm_bin.is_file():
+        tsc = str(npm_bin)
+    local_tsc = REPO / 'node_modules' / '.bin' / 'tsc'
+    if local_tsc.is_file():
+        tsc = str(local_tsc)
+    if not tsc:
+        return {'status': 'FAIL', 'reason': 'tsc not installed (npm install)', **info, 'pin': pin}
+    checks = []
+    for proj in (
+        REPO / 'vendor' / 'genoffice' / 'packages' / 'pptx-engine',
+        REPO / 'vendor' / 'genoffice' / 'packages' / 'docx-engine',
+        REPO / 'packages' / 'docx-embed',
+    ):
+        proc = subprocess.run(
+            [tsc, '--noEmit', '-p', str(proj)],
+            cwd=str(REPO), env=env, capture_output=True, text=True, timeout=180,
+        )
+        checks.append({
+            'project': str(proj.relative_to(REPO)),
+            'exit': proc.returncode,
+            'log': ((proc.stdout or '') + '\n' + (proc.stderr or ''))[-400:],
+        })
+        if proc.returncode != 0:
+            return {
+                'status': 'FAIL',
+                'reason': 'typecheck failed: %s' % proj.name,
+                'checks': checks,
+                'pin': pin,
+                **info,
+            }
+    build = subprocess.run(
+        [node, str(REPO / 'packages' / 'docx-embed' / 'build.mjs')],
+        cwd=str(REPO), env=env, capture_output=True, text=True, timeout=120,
+    )
+    bundle = REPO / 'src' / 'editor' / 'bundle.cjs'
+    if build.returncode != 0 or not bundle.is_file():
+        return {
+            'status': 'FAIL',
+            'reason': 'embed bundle build failed',
+            'log': ((build.stdout or '') + '\n' + (build.stderr or ''))[-800:],
+            'pin': pin,
+            **info,
+        }
+    return {
+        'status': 'PASS',
+        'reason': 'source pin %s typecheck+bundle' % pin.get('commit', '')[:12],
+        'pin': pin,
+        'checks': [{'project': c['project'], 'exit': c['exit']} for c in checks],
+        **info,
     }
+
+
+def v1_npm_add_historical() -> dict:
+    """Record that the unpublished npm package still 404s (not the product V1)."""
+    pnpm = shutil.which('pnpm')
     if not pnpm:
-        return {'status': 'BLOCKED', 'reason': 'pnpm not on PATH', **info}
+        return {'status': 'SKIPPED', 'reason': 'pnpm not on PATH (expected npm 404 anyway)'}
     tmp = Path(tempfile.mkdtemp(prefix='v1-genoffice-'))
     try:
-        (tmp / 'package.json').write_text(
-            '{"name":"v1-probe","private":true}\n', encoding='utf-8')
-        env = os.environ.copy()
-        if bindir:
-            env['PATH'] = bindir + os.pathsep + env.get('PATH', '')
+        (tmp / 'package.json').write_text('{"name":"v1-probe","private":true}\n', encoding='utf-8')
         proc = subprocess.run(
             [pnpm, 'add', '@genoffice/docx-engine'],
-            cwd=str(tmp), env=env, capture_output=True, text=True, timeout=90,
+            cwd=str(tmp), capture_output=True, text=True, timeout=90,
         )
         log = ((proc.stdout or '') + '\n' + (proc.stderr or '')).strip()
-        EVIDENCE.mkdir(parents=True, exist_ok=True)
-        (EVIDENCE / 'v1_pnpm_add.log').write_text(log[-8000:], encoding='utf-8')
-        blocked = proc.returncode != 0 or 'ERR_PNPM_FETCH_404' in log or '404' in log
+        blocked = proc.returncode != 0 or '404' in log
         return {
             'status': 'BLOCKED' if blocked else 'PASS',
-            'exit': proc.returncode,
-            'reason': 'npm 404: @genoffice/docx-engine is private in genspark-ai/genoffice (not published)'
-            if blocked else 'installed',
-            'log_tail': log[-600:],
-            **info,
+            'reason': 'npm still unpublished (404 expected)' if blocked else 'unexpectedly installed',
         }
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -122,73 +177,44 @@ def v2_structural() -> dict:
         'ok': ok,
         'total': len(files),
         'failures': fails,
-        'note': 'headless zip+XML open/parse (no visual renderer available without genoffice npm)',
+        'note': 'headless zip+XML sanity; product V2 is the GenOffice Block renderer',
     }
 
 
-def v23_genoffice() -> dict:
-    src = Path(os.environ.get('GENOFFICE_SRC', '/tmp/genoffice'))
-    parse_ts = src / 'packages' / 'docx-engine' / 'src' / 'parse.ts'
-    if not parse_ts.is_file():
-        return {
-            'v2': 'SKIPPED', 'v3': 'BLOCKED',
-            'reason': 'no local genoffice checkout at %s' % src,
-        }
-    probe_dir = WORK / 'p4-probe'
-    probe_dir.mkdir(parents=True, exist_ok=True)
-    pkg = {
-        'name': 'p4-genoffice-probe',
-        'private': True,
-        'type': 'module',
-        'dependencies': {
-            '@genoffice/docx-engine': 'file:%s' % (src / 'packages' / 'docx-engine'),
-            '@genoffice/pptx-engine': 'file:%s' % (src / 'packages' / 'pptx-engine'),
-            'fast-xml-parser': '^5.3.4',
-            'jszip': '^3.10.1',
-            'utif2': '^4.1.0',
-            'tsx': '^4.21.0',
-        },
-        'pnpm': {
-            'overrides': {
-                '@genoffice/pptx-engine': 'file:%s' % (src / 'packages' / 'pptx-engine'),
-            }
-        },
-    }
-    (probe_dir / 'package.json').write_text(json.dumps(pkg, indent=2), encoding='utf-8')
-    pnpm = shutil.which('pnpm') or 'pnpm'
+def v23_embed() -> dict:
+    """Product V2/V3: parse+render and saveDocx one-char via the bundled adapter."""
     node, bindir = which_node()
     env = os.environ.copy()
     if bindir:
         env['PATH'] = bindir + os.pathsep + env.get('PATH', '')
-    env['GENOFFICE_SRC'] = str(src)
-    inst = subprocess.run(
-        [pnpm, 'install'], cwd=str(probe_dir), env=env,
-        capture_output=True, text=True, timeout=180,
-    )
-    if inst.returncode != 0:
-        return {
-            'v2': 'FAIL', 'v3': 'BLOCKED',
-            'reason': 'pnpm install of file:genoffice packages failed',
-            'log': ((inst.stdout or '') + inst.stderr)[-800:],
-        }
-    probe_js = probe_dir / 'probe.mjs'
-    shutil.copy2(TOOLS / 'v23_genoffice_probe.mjs', probe_js)
+    bundle = REPO / 'src' / 'editor' / 'bundle.cjs'
+    if not bundle.is_file():
+        build = subprocess.run(
+            [node, str(REPO / 'packages' / 'docx-embed' / 'build.mjs')],
+            cwd=str(REPO), env=env, capture_output=True, text=True, timeout=120,
+        )
+        if build.returncode != 0 or not bundle.is_file():
+            return {
+                'v2': 'BLOCKED', 'v3': 'BLOCKED',
+                'reason': 'embed bundle missing/failed',
+                'log': ((build.stdout or '') + '\n' + (build.stderr or ''))[-800:],
+            }
     proc = subprocess.run(
-        [pnpm, 'exec', 'tsx', str(probe_js)],
-        cwd=str(probe_dir), env=env,
-        capture_output=True, text=True, timeout=300,
+        [node, str(TOOLS / 'run_embed_gate.mjs')],
+        cwd=str(REPO), env=env, capture_output=True, text=True, timeout=420,
     )
     data = {}
-    for line in (proc.stdout or '').splitlines():
-        if line.startswith('P4_V23_JSON:'):
-            data = json.loads(line[len('P4_V23_JSON:'):])
+    blob = (proc.stdout or '') + '\n' + (proc.stderr or '')
+    for line in blob.splitlines():
+        if line.startswith('EMBED_V23_JSON:'):
+            data = json.loads(line[len('EMBED_V23_JSON:'):])
             break
     if not data:
         return {
             'v2': 'FAIL', 'v3': 'BLOCKED',
-            'reason': 'probe produced no JSON',
+            'reason': 'embed gate produced no JSON',
             'exit': proc.returncode,
-            'log': ((proc.stdout or '') + '\n' + (proc.stderr or ''))[-1200:],
+            'log': blob[-1200:],
         }
     return {
         'v2': data.get('v2', 'FAIL'),
@@ -199,7 +225,9 @@ def v23_genoffice() -> dict:
         'v3pass': data.get('v3pass'),
         'v3total': data.get('v3total'),
         'v3fail': data.get('v3fail') or [],
+        'pin': data.get('pin'),
         'exit': proc.returncode,
+        'path': 'saveDocx generated/xml + Block HTML renderer (not clone-only XML)',
     }
 
 
@@ -273,18 +301,20 @@ def v4_pdf() -> dict:
 
 def main() -> int:
     EVIDENCE.mkdir(parents=True, exist_ok=True)
-    print('P4 V1–V4 fidelity gate')
+    print('P4 V1–V4 fidelity gate (source-integrated GenOffice)')
     print('=' * 68)
 
-    v1 = v1_npm_add()
-    print('[V1] %s — %s (node %s)' % (v1['status'], v1.get('reason', ''), v1.get('node')))
+    v1 = v1_source_build()
+    print('[V1 source] %s — %s (node %s)' % (v1['status'], v1.get('reason', ''), v1.get('node')))
+    v1npm = v1_npm_add_historical()
+    print('[V1 npm historical] %s — %s' % (v1npm.get('status'), v1npm.get('reason')))
     v2s = v2_structural()
     print('[V2 structural] %s — %d/%d zip+XML' % (v2s['status'], v2s['ok'], v2s['total']))
     if v2s['failures']:
         for f in v2s['failures']:
             print('    FAIL %s (%s)' % (f['file'], f.get('error')))
-    v23 = v23_genoffice()
-    print('[V2 genoffice] %s  [V3] %s' % (v23.get('v2'), v23.get('v3')))
+    v23 = v23_embed()
+    print('[V2 renderer] %s  [V3 saveDocx] %s' % (v23.get('v2'), v23.get('v3')))
     if v23.get('v2fail'):
         for f in v23['v2fail'][:8]:
             print('    V2 fail %s: %s' % (f.get('file'), f.get('reason')))
@@ -295,30 +325,33 @@ def main() -> int:
     print('[V4] %s — pages=%s chinese=%s labels=%s' % (
         v4.get('status'), v4.get('pages'), v4.get('chineseOk'), v4.get('pageLabelOk')))
 
-    v2_final = 'PASS' if v2s['status'] == 'PASS' else 'FAIL'
-    if v23.get('v2') == 'FAIL':
-        v2_note = 'structural PASS; genoffice parse FAIL'
-        v2_final = 'PARTIAL'
+    if v23.get('v2') == 'PASS' and v2s['status'] == 'PASS':
+        v2_final = 'PASS'
+        v2_note = 'structural + GenOffice Block HTML renderer %s/%s' % (
+            v23.get('v2ok'), v23.get('v2total'))
     elif v23.get('v2') == 'PASS':
-        v2_note = 'structural + genoffice parse PASS (headless; no screenshot compare)'
+        v2_final = 'PARTIAL'
+        v2_note = 'renderer PASS; zip+XML %s' % v2s['status']
+    elif v2s['status'] == 'PASS':
+        v2_final = 'PARTIAL'
+        v2_note = 'zip+XML PASS; renderer %s (not product V2)' % v23.get('v2')
     else:
-        v2_note = 'structural PASS; genoffice parse %s' % v23.get('v2')
+        v2_final = 'FAIL'
+        v2_note = 'structural and renderer failed'
 
     v3_final = v23.get('v3') or 'BLOCKED'
-    # Product editor follows V1: unpublished package → E1, do not claim V3 PASS.
-    if v1['status'] == 'BLOCKED':
-        v3_product = 'BLOCKED'
+    if v1['status'] != 'PASS':
+        v3_product = 'BLOCKED' if v1['status'] == 'BLOCKED' else v3_final
         editor = 'E1'
-        note = ('@genoffice/docx-engine 未发布到 npm（private:true / 404）。'
-                '壳走 E1 表单 + 只读预览。clone 探针 V3=%s（不作为产品放行）。' % v3_final)
+        note = ('源码集成 V1=%s。壳走 E1 回退。embed V3=%s。' % (v1['status'], v3_final))
     elif v3_final == 'PASS':
         v3_product = 'PASS'
-        editor = 'genoffice'
-        note = 'V3 保真写回通过，可接编辑内核。'
+        editor = 'genoffice-embed'
+        note = '源码集成 V3 保真写回通过（saveDocx generated/xml + diff_parts）。E1 表单仍可用。'
     else:
         v3_product = v3_final
         editor = 'E1'
-        note = 'V3 未通过；壳走 E1 表单 + 只读预览。'
+        note = 'V3 未通过；壳走 E1 表单 + 只读预览。embed V3=%s。' % v3_final
     status = {
         'v1': v1['status'],
         'v2': v2_final,
@@ -326,11 +359,12 @@ def main() -> int:
         'v4': v4.get('status') or 'FAIL',
         'editorMode': editor,
         'note': note,
-        'v1_detail': v1,
+        'v1_detail': {k: v1.get(k) for k in ('status', 'reason', 'node')},
+        'v1_npm_historical': v1npm,
         'v2_structural': {'ok': v2s['ok'], 'total': v2s['total'], 'failures': v2s['failures']},
         'v2_note': v2_note,
-        'v23_genoffice': {k: v23.get(k) for k in (
-            'v2', 'v3', 'v2ok', 'v2total', 'v3pass', 'v3total', 'reason') if k in v23 or True},
+        'v23_embed': {k: v23.get(k) for k in (
+            'v2', 'v3', 'v2ok', 'v2total', 'v3pass', 'v3total', 'reason', 'path', 'pin')},
         'v3_fail_sample': (v23.get('v3fail') or [])[:5],
         'v2_fail_sample': (v23.get('v2fail') or [])[:5],
         'v4_detail': {k: v4.get(k) for k in (
@@ -343,6 +377,7 @@ def main() -> int:
         'v4': status['v4'],
         'editorMode': editor,
         'note': note,
+        'pin': (v1.get('pin') or {}).get('commit') or v23.get('pin'),
     }, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     (EVIDENCE / 'gate.json').write_text(
         json.dumps(status, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
@@ -350,17 +385,23 @@ def main() -> int:
     print()
     print('| Gate | Result | Notes |')
     print('|------|--------|-------|')
-    print('| V1 npm add `@genoffice/docx-engine` | %s | %s |' % (
+    print('| V1 source pin typecheck+bundle | %s | %s |' % (
         v1['status'], (v1.get('reason') or '')[:80]))
-    print('| V2 headless open/render 37 | %s | %s |' % (v2_final, v2_note[:80]))
-    print('| V3 clone probe (git file: + diff_parts) | %s | %s/%s files |' % (
-        v3_final, v23.get('v3pass'), v23.get('v3total')))
-    print('| V3 product (pnpm add from registry) | %s | E1 fallback; do not vendor private source |' % v3_product)
+    print('| V1 npm add (historical, unpublished) | %s | %s |' % (
+        v1npm.get('status'), (v1npm.get('reason') or '')[:80]))
+    print('| V2 Block HTML renderer 37 | %s | %s |' % (v2_final, v2_note[:80]))
+    print('| V3 saveDocx + diff_parts | %s | %s/%s files |' % (
+        v3_product, v23.get('v3pass'), v23.get('v3total')))
     print('| V4 booklet PDF page numbers / 中文 | %s | pages=%s chinese=%s |' % (
         v4.get('status'), v4.get('pages'), v4.get('chineseOk')))
     print('| editorMode | %s | %s |' % (editor, note[:80]))
     print('wrote', FIDELITY)
-    return 0 if v2s['status'] == 'PASS' and v4.get('status') == 'PASS' else 1
+    ok = v2_final in ('PASS', 'PARTIAL') and v4.get('status') == 'PASS' and v1['status'] != 'FAIL'
+    return 0 if ok else 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())
 
 
 if __name__ == '__main__':

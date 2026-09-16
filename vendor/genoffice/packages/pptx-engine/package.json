@@ -1,0 +1,11 @@
+{
+  "name": "@genoffice/pptx-engine",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "description": "Slim pin of genspark-ai/genoffice pptx-engine/custgeom (only docx-engine workspace import).",
+  "exports": {
+    "./custgeom": "./src/custgeom.ts"
+  }
+}

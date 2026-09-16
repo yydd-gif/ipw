@@ -1,0 +1,12 @@
+{
+  "name": "@yanshou/docx-embed",
+  "version": "0.8.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "GenOffice docx-engine adapter: Block renderer + body/table text save",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit"
+  }
+}

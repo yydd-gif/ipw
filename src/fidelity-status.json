@@ -1,8 +1,9 @@
 {
-  "v1": "BLOCKED",
+  "v1": "PASS",
   "v2": "PASS",
-  "v3": "BLOCKED",
+  "v3": "PASS",
   "v4": "PASS",
-  "editorMode": "E1",
-  "note": "@genoffice/docx-engine 未发布到 npm（private:true / 404）。壳走 E1 表单 + 只读预览。clone 探针 V3=PASS（不作为产品放行）。"
+  "editorMode": "genoffice-embed",
+  "note": "源码集成 V3 保真写回通过（saveDocx generated/xml + diff_parts）。E1 表单仍可用。",
+  "pin": "09485f884dc845cf3bf27fb7edfe489f9d457aad"
 }

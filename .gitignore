@@ -26,6 +26,7 @@ node_modules/
 dist/
 out/
 build/runtime/
+src/editor/bundle.cjs
 build/vendor/
 build/pack-manifest.json
 build/icon.png

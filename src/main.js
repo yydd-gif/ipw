@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const { installRoot, findPython, pythonEnv } = require('./runtime');
+const editorHost = require('./editor/host');
 
 const REPO = installRoot({
   packaged: app.isPackaged,
@@ -40,7 +41,7 @@ function loadFidelity() {
       v3: 'BLOCKED',
       v4: 'unknown',
       editorMode: 'E1',
-      note: 'genoffice 未作为 npm 包引入；壳走 E1 表单 + 只读预览',
+      note: 'embedded genoffice unavailable; 壳走 E1 表单 + 只读预览',
     };
   }
 }
@@ -129,7 +130,16 @@ app.whenReady().then(() => {
 });
 app.on('window-all-closed', () => app.quit());
 
-ipcMain.handle('fidelity', () => loadFidelity());
+ipcMain.handle('fidelity', () => {
+  const f = loadFidelity();
+  const ed = editorHost.status();
+  return {
+    ...f,
+    embedAvailable: !!ed.available,
+    embedReason: ed.reason || '',
+    embedPin: ed.pin || null,
+  };
+});
 ipcMain.handle('repo-info', () => ({
   repo: REPO,
   python: PYTHON,
@@ -286,4 +296,19 @@ ipcMain.handle('show-item', async (_e, filePath) => {
 
 ipcMain.handle('reveal-root', async (_e, dir) => {
   if (dir) await shell.openPath(dir);
+});
+
+ipcMain.handle('editor-status', () => editorHost.status());
+
+ipcMain.handle('editor-open', async (_e, { projectPath, relPath }) => {
+  if (!projectPath || !relPath) return { ok: false, reason: 'missing projectPath/relPath' };
+  return editorHost.openDoc({ repoRoot: REPO, projectPath, relPath });
+});
+
+ipcMain.handle('editor-save', async (_e, { sessionId, edits }) => {
+  return editorHost.saveDoc({ repoRoot: REPO, sessionId, edits });
+});
+
+ipcMain.handle('editor-close', async (_e, sessionId) => {
+  return editorHost.closeDoc(sessionId);
 });

@@ -4,7 +4,7 @@
 
 **建一个工程 = 建一个文件夹；点一次「一键成册」= 套完 37 份模板并填好 39 个字段。**
 
-当前进度：**P7 交付固化**（P0 填充回归仍保持 37 份 / 171 处 / 0 残留；P1–P6 保持绿）。编辑内核走 **E1 表单 + 只读预览 + 8 张子表网格**（V1 `pnpm add @genoffice/docx-engine` 为 npm 404，V3 产品路径 BLOCKED，不假装通过；不做 E2/E3 流式内核）。发行包内嵌引擎、模板与便携 Python；**dsh 运行时约 420MB，基础包默认不含**。凭据只走 `DEEPSEEK_API_KEY` 环境变量。
+当前进度：**P7 交付 + GenOffice 源码嵌入**（P0 填充回归仍保持 37 份 / 171 处 / 0 残留；P1–P7 保持绿）。编辑内核优先 **嵌入 `vendor/genoffice` 的 `docx-engine`（Apache-2.0 钉死 commit）**：右侧「正文」可改正文/表格文字并写回**工程副本**。`pnpm add @genoffice/docx-engine` 仍是 npm 404（private:true），不再当作产品 V1。嵌入不可用时回退 **E1 表单 + 只读预览**。不是 Word 替代品。发行包内嵌引擎、模板与便携 Python；**dsh 运行时约 420MB，基础包默认不含**。凭据只走 `DEEPSEEK_API_KEY` 环境变量。
 
 > 施工入口请先读 [`docs/00_交付说明.md`](docs/00_交付说明.md) 和 [`docs/设计文档/施工交接说明.md`](docs/设计文档/施工交接说明.md)，不要从设计文档第一页通读。
 
@@ -107,9 +107,26 @@ npm run dev
 YANSHOU_PROJECT=/path/to/project npm run dev
 ```
 
-Linux 无沙箱环境会自动加 `--no-sandbox`。界面：新建/打开工程文件夹 → 左侧三页签树（填写四色点 + 独立「印」角标）→ 右侧台账/只读预览/作业面板 + 39 字段 E1 表单 → **一键成册**（child_process：`datafill` → `fill` → `docgen` → `verify`）→ 打印标记（`_printStates`）→ 导出整册 PDF。
+Linux 无沙箱环境会自动加 `--no-sandbox`。界面：新建/打开工程文件夹 → 左侧三页签树 → 右侧 **正文（嵌入编辑）** / 只读预览 / 台账 / 子表 / 作业 + 39 字段 E1 表单 → **一键成册** → 打印标记 → 导出整册 PDF。正文保存只写工程副本，**永不写 `assets/templates/`**。
 
-V1–V4 怎么读结果：看 PR 说明或 `src/fidelity-status.json`。**V3 未放行时不要接 genoffice 编辑器。**
+V1–V4 怎么读结果：看 PR 说明或 `src/fidelity-status.json`。**V1 是源码钉死 + typecheck + bundle**，不是 npm add。**V2 必须走 Block 渲染器**（`tools/run_embed_gate.mjs`），不能只用 zip/XML。**V3 必须走 `saveDocx` 的 generated/xml 路径再 `diff_parts`**；clone-only XML 不算产品通过。嵌入失败时壳回退 E1。
+
+---
+
+## 怎么跑嵌入编辑（GenOffice 源码）
+
+`@genoffice/docx-engine` **未发布 npm**。产品依赖钉死在 [`vendor/genoffice/`](vendor/genoffice/)（Apache-2.0，见 `PIN.json` / `LICENSE` / `NOTICE`）。官方 `apps/docs` TipTap 壳没有嵌入 API，未整包引进。
+
+```bash
+npm install                 # prepare → src/editor/bundle.cjs
+npm run embed:typecheck
+npm run embed:gate          # V2 渲染 37 份 + V3 改一字 saveDocx + diff_parts
+python tools/run_embed_regression.py
+# 或
+npm run embed:smoke
+```
+
+工作副本写到 `work/embed-v23/`，不碰模板。嵌入失败时壳回退 E1，状态条会写明原因。
 
 ---
 
@@ -229,7 +246,9 @@ tools/                          体检与回归（run_health / run_p7_regression
 scripts/                        fetch_python_runtime / prepare_pack / pack.js
 docs/                           使用手册.md · 打包说明.md · 设计文档
 examples/demo_project.json      试跑工程数据
-src/                            Electron 壳 E1（含模板体检向导）
+src/                            Electron 壳（E1 表单 + 嵌入正文编辑 + 打包）
+vendor/genoffice/               钉死的 GenOffice 源码（docx-engine + custgeom，Apache-2.0）
+packages/docx-embed/            Block 渲染器 + saveDocx 适配
 .github/workflows/pack.yml      Linux 烟测 + Windows nsis/zip/portable
 work/                           引擎输出（gitignore；永不指向 templates）
 ```

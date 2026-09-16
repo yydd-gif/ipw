@@ -1,0 +1,11 @@
+{
+  "extends": "../../vendor/genoffice/tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "paths": {
+      "@genoffice/docx-engine": ["../../vendor/genoffice/packages/docx-engine/src/index.ts"],
+      "@genoffice/pptx-engine/custgeom": ["../../vendor/genoffice/packages/pptx-engine/src/custgeom.ts"]
+    }
+  },
+  "include": ["src"]
+}

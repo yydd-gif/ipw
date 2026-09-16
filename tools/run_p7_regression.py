@@ -131,7 +131,8 @@ def test_pack_config(failures: list) -> None:
     scripts = pkg.get('scripts') or {}
     for key in ('pack', 'pack:linux', 'pack:win', 'p7:smoke'):
         check(key in scripts, 'npm script ' + key, scripts.get(key) or 'missing', failures)
-    check(pkg.get('version', '').startswith('0.7'), 'version 0.7.x',
+    check(pkg.get('version', '').startswith('0.7') or pkg.get('version', '').startswith('0.8'),
+          'version 0.7.x/0.8.x',
           pkg.get('version'), failures)
     check((SOURCE / 'docs' / '使用手册.md').is_file(), 'user manual',
           'docs/使用手册.md', failures)

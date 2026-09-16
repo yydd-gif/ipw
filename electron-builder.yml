@@ -56,6 +56,13 @@ extraResources:
     to: python
     filter:
       - "**/*"
+  - from: vendor/genoffice
+    to: vendor/genoffice
+    filter:
+      - LICENSE
+      - NOTICE
+      - PIN.json
+      - README.md
   - from: build/pack-manifest.json
     to: pack-manifest.json
 extraMetadata:

@@ -25,6 +25,7 @@ const state = {
   ai: { available: false, reason: 'no-api-key', hasKey: false },
   rewriteMode: 'polish',
   rewriteTarget: 'projectBackground',
+  editor: { available: false, reason: '', sessionId: null, html: '', relPath: '' },
 };
 
 function $(id) { return document.getElementById(id); }
@@ -378,6 +379,109 @@ async function renderPreview() {
   }
 }
 
+function collectEditorEdits() {
+  const edits = [];
+  document.querySelectorAll('#mainPane [data-go-edit]').forEach((el) => {
+    const idx = Number(el.dataset.goIdx);
+    if (Number.isNaN(idx)) return;
+    if (el.dataset.goEdit === 'paragraph') {
+      edits.push({ kind: 'paragraph', docxIndex: idx, text: el.textContent || '' });
+    } else if (el.dataset.goEdit === 'table-cell') {
+      edits.push({
+        kind: 'table-cell',
+        docxIndex: idx,
+        row: Number(el.dataset.goRow),
+        col: Number(el.dataset.goCol),
+        text: el.textContent || '',
+      });
+    }
+  });
+  return edits;
+}
+
+function paintEditor(html, note) {
+  const mode = state.editor.available ? '嵌入编辑（GenOffice 源码）' : 'E1 回退';
+  $('mainPane').innerHTML =
+    '<div class="go-bar">' +
+    '<span>' + escapeHtml(mode) + (note ? ' · ' + escapeHtml(note) : '') + '</span>' +
+    '<span class="go-bar-hint">只写工程副本，永不写 templates</span></div>' +
+    (html || '<p class="empty-hint">无正文</p>');
+  $('mainPane').querySelectorAll('[data-go-edit]').forEach((el) => {
+    el.addEventListener('input', () => setDirty(1));
+  });
+  $('sbPage').textContent = state.editor.available ? '嵌入正文编辑' : 'E1 只读预览';
+}
+
+async function renderEditor() {
+  const doc = currentDoc();
+  if (!doc) {
+    $('mainPane').innerHTML = '<p class="empty-hint">选一份已生成的文档编辑正文 / 表格文字。<br>未成册的目录项先点「一键成册」。模板资产不可打开写入。</p>';
+    return;
+  }
+  if (!state.editor.available) {
+    $('mainPane').innerHTML =
+      '<p class="empty-hint">嵌入编辑不可用：' + escapeHtml(state.editor.reason || 'bundle missing') +
+      '<br>已回退 E1 只读预览。可切换「预览」页查看。</p>';
+    $('sbPage').textContent = 'E1 回退（嵌入不可用）';
+    return;
+  }
+  $('mainPane').innerHTML = '<p class="empty-hint">正在用 GenOffice 引擎打开…</p>';
+  try {
+    if (state.editor.sessionId) {
+      try { await api.editorClose(state.editor.sessionId); } catch { /* ignore */ }
+    }
+    const payload = await api.editorOpen({
+      projectPath: state.projectPath,
+      relPath: doc.relPath,
+    });
+    if (!payload.ok) {
+      state.editor.sessionId = null;
+      $('mainPane').innerHTML =
+        '<p class="empty-hint">无法打开嵌入编辑：' + escapeHtml(payload.reason || 'unknown') +
+        '<br>已保持 E1 可用。点「预览」查看只读页。</p>';
+      $('sbPage').textContent = 'E1 回退';
+      return;
+    }
+    state.editor.sessionId = payload.sessionId;
+    state.editor.html = payload.html;
+    state.editor.relPath = payload.relPath;
+    const st = payload.stats || {};
+    paintEditor(payload.html, (st.visible || 0) + ' 块 / 表 ' + (st.tables || 0));
+  } catch (err) {
+    $('mainPane').innerHTML = '<p class="empty-hint">' + escapeHtml(err.message) + '</p>';
+  }
+}
+
+async function saveEditorDocx() {
+  if (!state.editor.available || !state.editor.sessionId) {
+    toast(state.editor.available ? '先打开一份工程文档' : ('嵌入不可用：' + (state.editor.reason || '')));
+    return;
+  }
+  try {
+    const payload = await api.editorSave({
+      sessionId: state.editor.sessionId,
+      edits: collectEditorEdits(),
+    });
+    if (!payload.ok) {
+      toast(payload.reason || '保存失败');
+      return;
+    }
+    paintEditor(payload.html, '已写回工程副本');
+    setDirty(0);
+    toast('正文已保存到工程文档（未改 templates）');
+  } catch (err) {
+    toast('保存失败：' + err.message);
+  }
+}
+
+function showMainView() {
+  if (state.view === 'ledger') renderLedger();
+  else if (state.view === 'jobs') renderJobs();
+  else if (state.view === 'tables') renderTables();
+  else if (state.view === 'edit') renderEditor();
+  else renderPreview();
+}
+
 function currentDoc() {
   const mine = state.docs.filter((d) => d.itemId === state.selectedItemId && d.exists);
   if (state.selectedDocId) {
@@ -408,6 +512,7 @@ function applyOpen(payload) {
   if (state.view === 'ledger') renderLedger();
   else if (state.view === 'jobs') renderJobs();
   else if (state.view === 'tables') renderTables();
+  else if (state.view === 'edit') renderEditor();
   else renderPreview();
 }
 
@@ -415,11 +520,10 @@ function selectItem(itemId) {
   state.selectedItemId = itemId;
   const docs = state.docs.filter((d) => d.itemId === itemId);
   state.selectedDocId = docs[0] ? docs[0].docId : null;
-  state.view = docs.length ? 'preview' : 'ledger';
+  state.view = docs.length ? (state.editor.available ? 'edit' : 'preview') : 'ledger';
   document.querySelectorAll('.etab').forEach((t) => t.classList.toggle('on', t.dataset.view === state.view));
   renderTree();
-  if (state.view === 'preview') renderPreview();
-  else renderLedger();
+  showMainView();
 }
 
 document.querySelectorAll('[data-act]').forEach((el) => {
@@ -442,6 +546,7 @@ document.querySelectorAll('.etab').forEach((el) => {
     if (state.view === 'ledger') renderLedger();
     else if (state.view === 'jobs') renderJobs();
     else if (state.view === 'tables') renderTables();
+    else if (state.view === 'edit') renderEditor();
     else renderPreview();
   });
 });
@@ -460,7 +565,11 @@ $('treePane').addEventListener('click', (e) => {
 });
 
 $('btnSync').addEventListener('click', saveFields);
-$('btnSave').addEventListener('click', saveFields);
+$('btnSave').addEventListener('click', () => {
+  if (state.view === 'edit') saveEditorDocx();
+  else saveFields();
+});
+$('btnSaveDocx').addEventListener('click', saveEditorDocx);
 $('btnSyncRevert').addEventListener('click', () => confirmSync('revert'));
 $('btnSyncThis').addEventListener('click', () => confirmSync('this'));
 $('btnSyncAll').addEventListener('click', () => confirmSync('all'));
@@ -625,9 +734,11 @@ async function onAct(act) {
   }
   if (act === 'about') {
     const f = state.fidelity || {};
+    const ed = state.editor || {};
     $('aboutFidelity').textContent =
       'V1=' + f.v1 + '  V2=' + f.v2 + '  V3=' + f.v3 + '  V4=' + f.v4 +
-      '  · 编辑模式 ' + (f.editorMode || 'E1');
+      '  · 编辑模式 ' + (f.editorMode || 'E1') +
+      (ed.available ? '（嵌入可用）' : ('（嵌入不可用，E1 回退：' + (ed.reason || '') + '）'));
     show('dlgAbout');
     return;
   }
@@ -719,7 +830,7 @@ async function onAct(act) {
     state.view = 'preview';
     document.querySelectorAll('.etab').forEach((t) => t.classList.toggle('on', t.dataset.view === 'preview'));
     await renderPreview();
-    toast('打印预览 = 当前只读页（E1）');
+    toast('打印预览 = 当前只读页');
     return;
   }
   if (act === 'print-mark') {
@@ -927,12 +1038,25 @@ api.onProgress((line) => {
 
 (async function init() {
   try {
+    const ed = await api.editorStatus();
+    state.editor.available = !!ed.available;
+    state.editor.reason = ed.reason || '';
+  } catch (err) {
+    state.editor.available = false;
+    state.editor.reason = err.message || 'status-error';
+  }
+  try {
     state.fidelity = await api.fidelity();
     const f = state.fidelity;
+    const ed = state.editor;
+    const mode = (f && f.editorMode) || (ed && ed.available ? 'genoffice-embed' : 'E1');
     $('modeBanner').textContent =
-      '编辑内核：' + (f.editorMode === 'E1' ? 'E1 表单 + 只读预览' : f.editorMode) +
-      '  ·  V1 ' + f.v1 + ' / V2 ' + f.v2 + ' / V3 ' + f.v3 + ' / V4 ' + f.v4 +
-      (f.note ? '  — ' + f.note : '');
+      (ed && ed.available
+        ? '编辑内核：嵌入 GenOffice 源码（正文/表格文字可写回工程副本；模板只读）'
+        : '编辑内核：E1 表单 + 只读预览（嵌入不可用：' + ((ed && ed.reason) || '未构建') + '）') +
+      '  ·  V1 ' + (f && f.v1) + ' / V2 ' + (f && f.v2) + ' / V3 ' + (f && f.v3) + ' / V4 ' + (f && f.v4) +
+      '  · 模式 ' + mode;
+    $('sbPage').textContent = ed && ed.available ? '嵌入正文编辑就绪' : 'E1 只读预览';
   } catch {
     /* ignore */
   }

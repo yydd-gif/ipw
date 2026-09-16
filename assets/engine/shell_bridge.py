@@ -28,6 +28,15 @@ if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 from lib.ai_gate import ai_status  # noqa: E402
+
+
+def _editor_mode() -> str:
+    p = REPO / 'src' / 'fidelity-status.json'
+    try:
+        data = json.loads(p.read_text(encoding='utf-8'))
+        return str(data.get('editorMode') or 'E1')
+    except (OSError, json.JSONDecodeError):
+        return 'E1'
 from lib.catalog_build import build_catalog_snapshot  # noqa: E402
 from lib.catalog_pages import apply_structure_to_docx  # noqa: E402
 from lib.docx_preview import preview_docx  # noqa: E402
@@ -253,7 +262,7 @@ def _open_payload(project_path: Path) -> dict:
         'ledger': _ledger(snap.get('items') or [], docs, print_states, req_miss),
         'requiredMissing': [k for k in REQUIRED if not str(project.get(k) or '').strip()],
         'schema': project.get('_schema'),
-        'editorMode': 'E1',
+        'editorMode': _editor_mode(),
         'syncCapable': True,
         'ai': ai_status(probe_network=False),
     }

@@ -1,0 +1,20 @@
+{
+  "upstream": "https://github.com/genspark-ai/genoffice",
+  "license": "Apache-2.0",
+  "commit": "09485f884dc845cf3bf27fb7edfe489f9d457aad",
+  "committedAt": "2026-09-16 19:21:03 +0800",
+  "subject": "let MCP agents work with the open documents (#445)",
+  "included": [
+    "packages/docx-engine/src (parse/save engine; private unpublished npm package)",
+    "packages/pptx-engine/src/custgeom.ts (only workspace import used by parse.ts)",
+    "packages/docx-engine/src/vendor/emf-converter (Apache-2.0, bundled by upstream)",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "excluded": [
+    "apps/docs TipTap/ProseMirror renderer (no embed API; Electron 43; AI/MCP/Zotero)",
+    "apps/shell, packages/agent-core, packages/ai-*, ee/",
+    "upstream tests/fixtures"
+  ],
+  "integrationBoundary": "docx-engine parseDocx/saveDocx/patchTableCellTexts + a product Block HTML renderer. The official visual editor lives in apps/docs and is not a library; embedding it would pull React 19, TipTap, Electron 43, and AI. Body/table text save uses the same SaveBlock contract as apps/docs convert.ts (generated paragraphs; xml + patchTableCellTexts for tables)."
+}
