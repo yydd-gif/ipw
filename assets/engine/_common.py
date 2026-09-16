@@ -10,7 +10,9 @@ Layout (施工交接说明 §5):
 from __future__ import annotations
 
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 ENGINE_DIR = Path(__file__).resolve().parent
@@ -19,11 +21,43 @@ REPO = BASE.parent
 TEMPLATES = BASE / 'templates'
 SPEC = BASE / 'spec'
 TEMPLATES_BACKUP = BASE / 'templates-backup'
-WORK = REPO / 'work'
 EXAMPLES = REPO / 'examples'
 DICT_PATH = SPEC / '字段字典.json'
 ABBR_PATH = SPEC / '表名缩写字典.csv'
 RULES_PATH = SPEC / '填数规则.yaml'
+VENDOR = REPO / 'lib' / 'vendor'
+
+# Packaged extraResources put pypdf here; keep importable without system site-packages.
+for _vendor in (VENDOR, REPO / 'vendor'):
+    if _vendor.is_dir() and str(_vendor) not in sys.path:
+        sys.path.insert(0, str(_vendor))
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+
+
+def work_dir() -> Path:
+    """Writable engine scratch. Packaged installs must not write next to extraResources."""
+    env = (os.environ.get('YANSHOU_WORK') or '').strip()
+    candidates = []
+    if env:
+        candidates.append(Path(env))
+    candidates.append(REPO / 'work')
+    candidates.append(Path(tempfile.gettempdir()) / 'yanshou-work')
+    last_err = None
+    for cand in candidates:
+        try:
+            cand.mkdir(parents=True, exist_ok=True)
+            probe = cand / '.write-test'
+            probe.write_text('ok', encoding='utf-8')
+            probe.unlink()
+            return cand
+        except OSError as e:
+            last_err = e
+            continue
+    raise OSError('no writable work dir: %s' % last_err)
+
+
+WORK = Path(os.environ['YANSHOU_WORK']) if os.environ.get('YANSHOU_WORK') else (REPO / 'work')
 
 SKIP_DIR_NAMES = {'00_模板原始备份'}
 

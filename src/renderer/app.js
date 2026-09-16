@@ -478,6 +478,40 @@ $('btnCreateGo').addEventListener('click', async () => {
     toast('创建失败：' + err.message);
   }
 });
+
+function renderHealth(payload) {
+  const items = payload.items || (payload.stats && payload.stats.items) || [];
+  const list = $('healthList');
+  const sum = $('healthSummary');
+  const ok = payload.ok !== false && !items.some((it) => it.level === 'fail');
+  sum.className = 'health-sum ' + (ok ? 'ok' : 'bad');
+  sum.textContent = payload.summary || (ok ? '体检通过' : '体检失败');
+  const markClass = { pass: 'hc-pass', fail: 'hc-fail', warn: 'hc-warn', skip: 'hc-skip' };
+  list.innerHTML = items.map((it) => {
+    const lv = it.level || (it.ok ? 'pass' : 'fail');
+    const lab = { pass: '通过', fail: '失败', warn: '警告', skip: '可选' }[lv] || lv;
+    return '<div class="hc"><span class="hc-mark ' + (markClass[lv] || '') + '">' + lab +
+      '</span><div class="hc-body"><span class="hc-key">' + escapeHtml(it.key || '') +
+      '</span><span class="hc-detail">' + escapeHtml(it.detail || '') + '</span></div></div>';
+  }).join('') || '<p class="empty-hint">无结果</p>';
+}
+
+async function runHealthCheck() {
+  $('healthSummary').className = 'health-sum';
+  $('healthSummary').textContent = '正在体检…';
+  $('healthList').innerHTML = '';
+  try {
+    const payload = await api.health();
+    renderHealth(payload);
+    toast(payload.summary || '体检完成');
+  } catch (err) {
+    $('healthSummary').className = 'health-sum bad';
+    $('healthSummary').textContent = '体检失败：' + err.message;
+    toast('体检失败：' + err.message);
+  }
+}
+
+$('btnHealthGo').addEventListener('click', runHealthCheck);
 $('btnExportGo').addEventListener('click', async () => {
   hide('dlgExport');
   if (!state.projectPath) return;
@@ -580,6 +614,16 @@ async function onAct(act) {
       'V1=' + f.v1 + '  V2=' + f.v2 + '  V3=' + f.v3 + '  V4=' + f.v4 +
       '  · 编辑模式 ' + (f.editorMode || 'E1');
     show('dlgAbout');
+    return;
+  }
+  if (act === 'manual') {
+    api.openManual().then((r) => {
+      if (!r || !r.ok) toast('未找到使用手册（docs/使用手册.md）');
+    }).catch((err) => toast(err.message));
+    return;
+  }
+  if (act === 'health') {
+    show('dlgHealth');
     return;
   }
   if (act === 'create') { show('dlgCreate'); return; }

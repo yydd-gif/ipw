@@ -1,0 +1,103 @@
+appId: com.yanshou.docs
+productName: 验收资料编辑软件
+copyright: Copyright © 2026
+asar: true
+electronVersion: 33.2.1
+directories:
+  output: dist
+  buildResources: build
+artifactName: ${name}-${version}-${os}-${arch}.${ext}
+files:
+  - src/**/*
+  - package.json
+  - "!**/*.map"
+extraResources:
+  - from: assets
+    to: assets
+    filter:
+      - "**/*"
+      - "!runtime/win-x64/**"
+      - "!runtime/linux-x64/**"
+  - from: lib
+    to: lib
+    filter:
+      - "**/*"
+      - "!vendor/**"
+      - "!**/__pycache__/**"
+  - from: tools
+    to: tools
+    filter:
+      - "**/*"
+      - "!**/__pycache__/**"
+  - from: examples
+    to: examples
+  - from: docs
+    to: docs
+    filter:
+      - 使用手册.md
+      - 打包说明.md
+  - from: README.md
+    to: README.md
+  - from: requirements-p4.txt
+    to: requirements-p4.txt
+  - from: packages/dsh-yanshou-docs
+    to: optional/dsh-yanshou-docs
+    filter:
+      - "**/*"
+      - "!node_modules/**"
+      - "!**/*.tgz"
+      - "!**/__pycache__/**"
+  - from: build/vendor
+    to: lib/vendor
+    filter:
+      - "**/*"
+      - "!**/__pycache__/**"
+  - from: build/runtime
+    to: python
+    filter:
+      - "**/*"
+  - from: build/pack-manifest.json
+    to: pack-manifest.json
+extraMetadata:
+  main: src/main.js
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: zip
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  icon: build/icon.png
+  signAndEditExecutable: false
+  verifyUpdateCodeSignature: false
+  artifactName: ${name}-${version}-win-${arch}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  unicode: true
+  deleteAppDataOnUninstall: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 验收资料编辑软件
+  artifactName: ${name}-${version}-win-${arch}-setup.${ext}
+portable:
+  artifactName: ${name}-${version}-win-${arch}-portable.${ext}
+linux:
+  target:
+    - target: dir
+      arch: [x64]
+    - target: zip
+      arch: [x64]
+  category: Office
+  executableName: yanshou-docs
+  icon: build/icon.png
+  artifactName: ${name}-${version}-linux-${arch}.${ext}
+mac:
+  target:
+    - target: dir
+      arch: [x64]
+  category: public.app-category.productivity
+npmRebuild: false
+forceCodeSigning: false

@@ -1,0 +1,72 @@
+name: pack
+
+on:
+  push:
+    branches: [main, 'cursor/**']
+  pull_request:
+  workflow_dispatch:
+
+# P7: Linux smoke pack always; Windows nsis/zip/portable on windows-latest.
+# Unsigned. Does not upload secrets. dsh runtime is not packed.
+
+jobs:
+  linux-smoke:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Python deps
+        run: python -m pip install -r requirements-p4.txt
+      - name: P7 config + health (no dist yet)
+        run: python tools/run_p7_regression.py --skip-pack --skip-prior
+      - name: npm install
+        run: npm install
+      - name: Linux dir + zip
+        run: npm run pack:linux
+      - name: P7 against extraResources
+        run: |
+          ROOT="$PWD/dist/linux-unpacked/resources"
+          test -d "$ROOT/assets/templates"
+          python tools/run_p7_regression.py --skip-prior --pack "$ROOT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-smoke-pack
+          path: |
+            dist/*.zip
+            dist/linux-unpacked/**
+            dist/*.yml
+          if-no-files-found: warn
+          retention-days: 14
+
+  windows-pack:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Python deps
+        run: python -m pip install -r requirements-p4.txt
+      - name: npm install
+        run: npm install
+      - name: Windows nsis + zip + portable
+        run: npm run pack:win
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-pack
+          path: |
+            dist/*.exe
+            dist/*.zip
+            dist/*.yml
+          if-no-files-found: warn
+          retention-days: 14
