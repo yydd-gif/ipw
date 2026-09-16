@@ -1,0 +1,26 @@
+# CI / 本机无 UI 时的 headless 审批策略（施工图 §9.1）
+#
+# 不要在本 overlay 里猜测 `id: approval` 的 config 键（方案 C，P3 不做）。
+# dsh-base 已经用官方 !!js 把审批策略接到环境变量：
+#
+#   policy: (process.env.DSH_PERMISSION_MODE ?? 'workspace-write') ===
+#           'danger-full-access' ? 'never' : 'ask'
+#
+# 默认 `ask` 在没有审批回调的 headless 壳里会一直挂住。
+#
+# 方案 A（生产，P4 壳必须做）：实现审批回调，弹窗问用户。
+# 方案 B（仅 CI / 本机无 UI 调试后门）：
+#   export DSH_PERMISSION_MODE=danger-full-access
+# 这会让官方 !!js 把 policy 变成 never，从而不挂。
+# **禁止把 danger-full-access 写进组合包 cordis.patch.yml。**
+#
+# 本 overlay 只把沙箱根钉到 process.cwd()，配合「启动 dsh 时 cwd=工程目录」。
+# 用法：
+#   dsh --profile yanshou --patch overlays/ci-headless.patch.yml
+
+- insert:
+    - id: sandbox-policy
+      name: '@deepseek-ai/dsh-sandbox-policy'
+      config:
+        mode: workspace-write
+        workspaceRoot: !!js process.cwd()

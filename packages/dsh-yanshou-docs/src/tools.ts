@@ -1,0 +1,359 @@
+import type { Context } from '@deepseek-ai/cordis'
+import { defineTool } from '@deepseek-ai/dsh-tools'
+import { join } from 'node:path'
+import type { Config } from './config'
+import {
+  runEngine,
+  resolveProjectDir,
+  resolveProjectFile,
+  resolveTemplatesDir,
+  type EngineResult,
+} from './bridge'
+import { assertWritable } from './policy'
+
+/**
+ * 七块确定性引擎的工具化。
+ *
+ * 注册顺序（施工图 §4.8）：datafill → docgen → fill → numbering → verify → aggregate
+ * 再加 subtable（P5 骨架已有 CLI，先注册以免模型拿到「脚本不存在」；真正行克隆留 P5）。
+ *
+ * 分工：确定性批处理本身不交给模型推理。模型负责选工具、给参数、解读结果。
+ */
+
+const textOutput = {
+  schema: { type: 'string' as const },
+  render: (_args: unknown, value: string) => [{ type: 'text' as const, text: value }],
+}
+
+function fmt(title: string, r: EngineResult): string {
+  const head = r.ok ? `【${title}】完成` : `【${title}】未通过（退出码 ${r.code}）`
+  const parts = [head, '', r.summary]
+  if (!r.ok && r.stderr.trim()) {
+    parts.push('', '── stderr ──', r.stderr.trim().slice(-1500))
+  }
+  return parts.join('\n')
+}
+
+const TABLE_KEYS = [
+  'deviceList',
+  'softwareList',
+  'testItemList',
+  'trialRunList',
+  'expertScoreList',
+  'documentList',
+  'documentChecklist',
+  'volumeList',
+] as const
+
+export function registerTools(ctx: Context, config: Config): void {
+  ctx.tools.register(
+    defineTool({
+      name: 'yanshou_datafill',
+      description:
+        '按字段字典与填数规则，算出整册每个占位符该填什么值，产出 FillPlan 预览。' +
+        '只算不写盘，不会改动任何文档。用于在真正填充前让用户确认取值是否正确。' +
+        '确定性计算，不调用模型推理。缺值字段会标记为 missing 并保留 {{key}}。',
+      parameters: {
+        itemId: {
+          type: 'string',
+          required: false,
+          description: '只算某个目录项，如 二-01。留空则全部。映射 --only',
+        },
+        outPlan: {
+          type: 'string',
+          required: false,
+          description: 'FillPlan 输出路径。默认 <工程>/_plan/fillplan.json',
+        },
+      },
+      output: textOutput,
+      async execute(args: Record<string, unknown>) {
+        const outPlan =
+          String(args?.outPlan ?? '') || join(resolveProjectDir(config), '_plan', 'fillplan.json')
+        assertWritable(outPlan, config)
+        const argv = [
+          '--project',
+          resolveProjectFile(config),
+          '--out',
+          outPlan,
+          '--json',
+        ]
+        if (args?.itemId) argv.push('--only', String(args.itemId))
+        const r = await runEngine(config, 'datafill_engine.py', argv)
+        return fmt('取值装配 · FillPlan', r)
+      },
+    }),
+  )
+
+  ctx.tools.register(
+    defineTool({
+      name: 'yanshou_docgen',
+      description:
+        '按目录清单生成文档：有模板的套模板，无模板的按 mode 三选一' +
+        '（template 选一个备用模板 / blank 建空白 / upload 占位等用户传 / skip 跳过）。' +
+        '默认跳过已存在的文档，保护用户的编辑成果。确定性批处理，不调用模型推理。',
+      parameters: {
+        itemId: {
+          type: 'string',
+          required: true,
+          description: 'all 或具体 itemId（如 二-01）。映射 --item',
+        },
+        count: {
+          type: 'number',
+          required: false,
+          description: '生成份数，默认 1。映射 --count',
+        },
+        mode: {
+          type: 'string',
+          required: false,
+          description: 'template / blank / upload / skip，默认 template。映射 --mode',
+        },
+        overwrite: {
+          type: 'boolean',
+          required: false,
+          description: '覆盖已存在文档，默认 false。映射 --overwrite',
+        },
+      },
+      output: textOutput,
+      async execute(args: Record<string, unknown>) {
+        const outDir = resolveProjectDir(config)
+        assertWritable(outDir, config)
+        const argv = [
+          '--project',
+          resolveProjectFile(config),
+          '--item',
+          String(args?.itemId ?? ''),
+          '--templates',
+          resolveTemplatesDir(config),
+          '--out',
+          outDir,
+          '--json',
+        ]
+        if (args?.count != null) argv.push('--count', String(args.count))
+        if (args?.mode) argv.push('--mode', String(args.mode))
+        if (args?.overwrite) argv.push('--overwrite')
+        const r = await runEngine(config, 'docgen_engine.py', argv)
+        return fmt('一键成册 · 文档生成', r)
+      },
+    }),
+  )
+
+  ctx.tools.register(
+    defineTool({
+      name: 'yanshou_fill',
+      description:
+        '按 FillPlan 把值填进模板生成文档，逐份输出到工程目录。确定性批处理，不调用模型推理。' +
+        '缺值的占位符原样保留 {{key}} 并记入报告，绝不填空字符串。' +
+        '若已用 yanshou_datafill 生成过计划，传 planPath 复用，保证与预览一致。',
+      parameters: {
+        outDir: {
+          type: 'string',
+          required: false,
+          description: '输出目录。默认当前工程目录。映射 --out',
+        },
+        planPath: {
+          type: 'string',
+          required: false,
+          description: '复用已有 FillPlan。留空则运行时重算。映射 --plan',
+        },
+        anchor: {
+          type: 'boolean',
+          required: false,
+          description: '写入 yz_ 书签 + customXml 锚点，默认 true。映射 --anchor on/off',
+        },
+      },
+      output: textOutput,
+      async execute(args: Record<string, unknown>) {
+        const outDir = String(args?.outDir ?? '') || resolveProjectDir(config)
+        assertWritable(outDir, config)
+        const argv = [
+          '--project',
+          resolveProjectFile(config),
+          '--out',
+          outDir,
+          '--templates',
+          resolveTemplatesDir(config),
+          '--json',
+          '--anchor',
+          args?.anchor === false ? 'off' : 'on',
+        ]
+        if (args?.planPath) argv.push('--plan', String(args.planPath))
+        const r = await runEngine(config, 'fill_engine.py', argv)
+        return fmt('模板填充 · 填充引擎', r)
+      },
+    }),
+  )
+
+  ctx.tools.register(
+    defineTool({
+      name: 'yanshou_numbering',
+      description:
+        '为文档分配/释放/恢复文档编号，格式 {合同编号}-{表名拼音缩写大写}-{流水号}，如 YYCZ-2026-0816-KGBSB-01。' +
+        '流水号在单个目录项内独立续排，删除只释放回本目录项的编号池，恢复取回原号。' +
+        '关键约束：编号在目录项内不重排 —— 删掉 02，03 仍然是 03。这是已打印纸质件的命根子。',
+      parameters: {
+        item: {
+          type: 'string',
+          required: true,
+          description: '目录项名或 itemId，优先 itemId。映射 --item',
+        },
+        action: {
+          type: 'string',
+          required: false,
+          description: 'allocate（默认）/ release / restore。映射 --action',
+        },
+        count: {
+          type: 'number',
+          required: false,
+          description: '申请个数，默认 1。映射 --count',
+        },
+        docNo: {
+          type: 'string',
+          required: false,
+          description: 'release / restore 时的目标编号。映射 --no',
+        },
+        docId: {
+          type: 'string',
+          required: false,
+          description: 'restore 时的文档 id。映射 --doc-id',
+        },
+      },
+      output: textOutput,
+      async execute(args: Record<string, unknown>) {
+        const project = resolveProjectFile(config)
+        assertWritable(project, config)
+        const argv = [
+          '--project',
+          project,
+          '--item',
+          String(args?.item ?? ''),
+          '--action',
+          String(args?.action ?? 'allocate'),
+          '--json',
+        ]
+        if (args?.count != null) argv.push('--count', String(args.count))
+        if (args?.docNo) argv.push('--no', String(args.docNo))
+        if (args?.docId) argv.push('--doc-id', String(args.docId))
+        const r = await runEngine(config, 'numbering_engine.py', argv)
+        return fmt('文档编号 · 编号引擎', r)
+      },
+    }),
+  )
+
+  ctx.tools.register(
+    defineTool({
+      name: 'yanshou_verify',
+      description:
+        '导出前最后一道查错：扫描残留占位符、字典里没有的 key、日期字段是否被误填。' +
+        '返回阻断项与警告项清单。有 block 级问题时不要继续导出，先让用户补齐。',
+      parameters: {
+        dir: {
+          type: 'string',
+          required: false,
+          description: '待校验目录，默认当前工程目录。映射 --dir',
+        },
+        level: {
+          type: 'string',
+          required: false,
+          description: 'block（默认）或 all。映射 --level',
+        },
+      },
+      output: textOutput,
+      async execute(args: Record<string, unknown>) {
+        const dir = String(args?.dir ?? '') || resolveProjectDir(config)
+        const argv = [
+          '--dir',
+          dir,
+          '--project',
+          resolveProjectFile(config),
+          '--json',
+        ]
+        if (args?.level) argv.push('--level', String(args.level))
+        const r = await runEngine(config, 'verify_engine.py', argv)
+        return fmt('导出前查错 · 校验闸门', r)
+      },
+    }),
+  )
+
+  ctx.tools.register(
+    defineTool({
+      name: 'yanshou_aggregate',
+      description:
+        '把施工日志按周/月聚合生成项目周报与月报。窗口内没有源日志时直接失败，不生成空文档。' +
+        '这是唯一需要模型参与生成的引擎：引擎负责取数与写入，模型的归纳在调用之前完成。' +
+        '本工具本身仍是确定性的，不会替你起草正文。',
+      parameters: {
+        period: {
+          type: 'string',
+          required: true,
+          description: 'week 或 month。映射 --period',
+        },
+        from: {
+          type: 'string',
+          required: false,
+          description: '起始日期 YYYY-MM-DD，默认上一自然周/月。映射 --from',
+        },
+        to: {
+          type: 'string',
+          required: false,
+          description: '截止日期 YYYY-MM-DD。映射 --to',
+        },
+        outDoc: {
+          type: 'string',
+          required: false,
+          description: '输出文档路径。映射 --out',
+        },
+      },
+      output: textOutput,
+      async execute(args: Record<string, unknown>) {
+        if (args?.outDoc) assertWritable(String(args.outDoc), config)
+        const argv = [
+          '--period',
+          String(args?.period ?? ''),
+          '--project',
+          resolveProjectFile(config),
+          '--json',
+        ]
+        if (args?.from) argv.push('--from', String(args.from))
+        if (args?.to) argv.push('--to', String(args.to))
+        if (args?.outDoc) argv.push('--out', String(args.outDoc))
+        const r = await runEngine(config, 'aggregate_engine.py', argv)
+        return fmt('日志汇总 · 自动汇总引擎', r)
+      },
+    }),
+  )
+
+  ctx.tools.register(
+    defineTool({
+      name: 'yanshou_subtable',
+      description:
+        '识别文档中的清单型表格，按表头列名匹配后接管数据行：数据不足则克隆行，多余则删除行。' +
+        '模板侧不含任何子表标记，识别完全靠表头列名序列 —— 所以不要改模板表头文字。' +
+        'P3 阶段引擎仍是 P0 骨架（P5 才做行克隆）；调用会得到明确的 not-implemented 摘要，而不是「脚本不存在」。',
+      parameters: {
+        docPath: { type: 'string', required: true, description: '目标文档路径。映射 --doc' },
+        tableKey: {
+          type: 'string',
+          required: false,
+          description:
+            '子表 key（' +
+            TABLE_KEYS.join(' / ') +
+            '）。留空则自动识别。映射 --table',
+        },
+        dataFile: {
+          type: 'string',
+          required: false,
+          description: '数据源 JSON/CSV。默认从 project.json._assets 取。映射 --data',
+        },
+      },
+      output: textOutput,
+      async execute(args: Record<string, unknown>) {
+        assertWritable(String(args?.docPath ?? ''), config)
+        const argv = ['--doc', String(args?.docPath ?? ''), '--json']
+        if (args?.tableKey) argv.push('--table', String(args.tableKey))
+        if (args?.dataFile) argv.push('--data', String(args.dataFile))
+        const r = await runEngine(config, 'subtable_engine.py', argv)
+        return fmt('清单表接管 · 子表识别引擎', r)
+      },
+    }),
+  )
+}

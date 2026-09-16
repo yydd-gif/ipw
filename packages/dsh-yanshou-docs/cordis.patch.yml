@@ -1,0 +1,67 @@
+# dsh-yanshou-docs 「组合包」配置层 · v0.2
+#
+# 只用 dsh.bundle.patch，不用 dsh.client（壳拥有编辑 UI）。
+#
+# 层顺序（后层按行胜出，且 patch 替换目标行整个 config，不深合并）：
+#   1. dsh.profile.bundles 所列各组合包 patch，按列表顺序（先是 dsh-base）
+#   2. profile 自己的 cordis.patch.yml
+#   3. $DSH_HOME/cordis.patch.yml（机器本地偏好）
+#   4. 每个 --patch <path> overlay，按 argv 顺序
+#
+# 凭据红线：本文件以及任何已提交文件都不得写入 API Key。
+# 模型凭据只走环境变量 DEEPSEEK_API_KEY（可选 DEEPSEEK_BASE_URL）。
+#
+# 用法：
+#   dsh --profile yanshou --from-default-profile sdk
+#   pnpm pack
+#   dsh plugin --profile yanshou add ./dsh-yanshou-docs-0.2.0.tgz   # 必须用 tarball
+#   dsh --profile yanshou --dump-config
+#     期望出现：# == dsh-yanshou-docs
+#     bundles = [dsh-base, dsh-sdk-app, dsh-yanshou-docs]
+
+- insert:
+    - id: yanshou-docs
+      name: dsh-yanshou-docs
+      config:
+        # ── 双轨制目录 ──────────────────────────────
+        # 安装资产根（只读）：templates / spec / engine / runtime
+        installRoot: 'C:/Program Files/YanshouDocs/assets'
+        # 工程数据根（可读写，用户可整包拷走）
+        workspaceRoot: 'D:/验收资料/岳阳市财政局信息中心机房改造工程'
+        # 当前工程（壳切换工程时由壳传入 --patch 覆盖）
+        activeProject: 'D:/验收资料/岳阳市财政局信息中心机房改造工程'
+
+        # ── 运行时（内嵌，不依赖系统 Python）──────────
+        pythonBin: 'C:/Program Files/YanshouDocs/runtime/python/python.exe'
+        engineRoot: ''      # 留空 = <installRoot>/engine
+
+        # ── 模板保护 ────────────────────────────────
+        protectedPaths:
+          - 'templates'
+          - 'templates-backup'
+          - 'templates_原始备份'
+        allowWriteToTemplates: false
+
+        # ── 其他 ────────────────────────────────────
+        engineTimeoutMs: 600000
+
+    # ── 模型默认值（按 id 覆盖 dsh-base 的行，必须重述整行 config）──
+    - id: agent-default-model
+      name: '@deepseek-ai/dsh-agent-default-model'
+      config:
+        provider: deepseek-official
+        model: deepseek-flash          # 只写合法名，不用 chat/reasoner 别名
+
+    # ── 系统提示词（覆盖 dsh-sdk-app 改过的那一行，必须重述整行）─────
+    - id: system-prompt
+      name: '@deepseek-ai/dsh-system-prompt'
+      config:
+        personaPrefix: 「你是验收资料助手，负责按目录清单组织与生成工程验收文档。」
+        personaSuffix: '当前工程目录是 {{cwd}}。不要修改 assets/templates 下的任何模板文件。'
+
+    # ── 沙箱（启动 dsh 时 cwd 必须是工程目录；本行 workspaceRoot 可被 overlay 覆盖）─────
+    - id: sandbox-policy
+      name: '@deepseek-ai/dsh-sandbox-policy'
+      config:
+        mode: 'workspace-write'
+        workspaceRoot: 'D:/验收资料/岳阳市财政局信息中心机房改造工程'

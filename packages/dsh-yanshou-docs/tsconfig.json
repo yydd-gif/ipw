@@ -13,5 +13,5 @@
     "declaration": true,
     "noEmit": true
   },
-  "include": ["src", "tsdown.config.ts"]
+  "include": ["src"]
 }
