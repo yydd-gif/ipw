@@ -103,6 +103,8 @@ npm run p4:smoke
 ```bash
 npm install
 npm run dev
+# 可选：跳过系统文件夹对话框，直接打开已有工程（GUI 试跑 / 演示）
+YANSHOU_PROJECT=/path/to/project npm run dev
 ```
 
 Linux 无沙箱环境会自动加 `--no-sandbox`。界面：新建/打开工程文件夹 → 左侧三页签树（填写四色点 + 独立「印」角标）→ 右侧台账/只读预览/作业面板 + 39 字段 E1 表单 → **一键成册**（child_process：`datafill` → `fill` → `docgen` → `verify`）→ 打印标记（`_printStates`）→ 导出整册 PDF。

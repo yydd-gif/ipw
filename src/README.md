@@ -1,6 +1,6 @@
 # Electron 壳（P4 · E1 MVP）
 
-入口：仓库根目录 `package.json` → `npm run dev`。
+入口：仓库根目录 `package.json` → `npm run dev`。可选环境变量 `YANSHOU_PROJECT=/path/to/project` 在启动时自动打开该工程文件夹（跳过系统对话框，便于演示与 GUI 试跑）。
 
 主进程 `src/main.js` 通过 `child_process` 调用：
 

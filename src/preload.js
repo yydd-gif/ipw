@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('api', {
   fidelity: () => ipcRenderer.invoke('fidelity'),
   repoInfo: () => ipcRenderer.invoke('repo-info'),
+  autoProject: () => ipcRenderer.invoke('auto-project'),
   createProject: (fields) => ipcRenderer.invoke('create-project', fields),
   openProject: () => ipcRenderer.invoke('open-project'),
   openPath: (dir) => ipcRenderer.invoke('open-path', dir),

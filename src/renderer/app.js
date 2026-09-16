@@ -496,4 +496,17 @@ api.onProgress((line) => {
   } catch {
     /* ignore */
   }
+  try {
+    const auto = await api.autoProject();
+    if (auto) {
+      const payload = await api.openPath(auto);
+      applyOpen(payload);
+      state.view = 'ledger';
+      document.querySelectorAll('.etab').forEach((t) => t.classList.toggle('on', t.dataset.view === 'ledger'));
+      renderLedger();
+      toast('已自动打开工程');
+    }
+  } catch (err) {
+    toast('自动打开失败：' + err.message);
+  }
 })();

@@ -107,6 +107,7 @@ app.on('window-all-closed', () => app.quit());
 
 ipcMain.handle('fidelity', () => loadFidelity());
 ipcMain.handle('repo-info', () => ({ repo: REPO, python: PYTHON }));
+ipcMain.handle('auto-project', () => process.env.YANSHOU_PROJECT || '');
 
 ipcMain.handle('create-project', async (_e, fields) => {
   const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
