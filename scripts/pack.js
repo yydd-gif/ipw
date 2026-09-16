@@ -7,12 +7,14 @@
  *   node scripts/pack.js --linux --dir-only
  *
  * Windows NSIS / portable / zip must run on a Windows builder (or wine, unsupported here).
+ * On Windows, spawn .cmd via a shell (npx.cmd / electron-builder.cmd are not PE binaries).
  */
 const { spawnSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
 const ROOT = path.resolve(__dirname, '..');
+const WIN = process.platform === 'win32';
 const args = process.argv.slice(2);
 const wantWin = args.includes('--win');
 const wantMac = args.includes('--mac');
@@ -25,23 +27,29 @@ function run(cmd, cmdArgs, opts = {}) {
   const r = spawnSync(cmd, cmdArgs, {
     cwd: ROOT,
     stdio: 'inherit',
-    env: process.env,
+    env: { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' },
+    shell: WIN,
+    windowsHide: true,
     ...opts,
   });
+  if (r.error) {
+    console.error('spawn failed:', r.error);
+  }
   if (r.status !== 0) {
     process.exit(r.status == null ? 1 : r.status);
   }
 }
 
-const py = process.env.PYTHON || process.env.PYTHON3 || (process.platform === 'win32' ? 'python' : 'python3');
+const py = process.env.PYTHON || process.env.PYTHON3 || (WIN ? 'python' : 'python3');
 const plat = wantWin ? 'win-x64' : 'linux-x64';
 const prep = [path.join(ROOT, 'scripts', 'prepare_pack.py'), '--platform', plat];
 if (skipRuntime) prep.push('--skip-runtime');
 run(py, prep);
 
-const eb = [path.join(ROOT, 'node_modules', '.bin', 'electron-builder')];
-const ebCmd = process.platform === 'win32' ? eb[0] + '.cmd' : eb[0];
-const ebBin = fs.existsSync(ebCmd) ? ebCmd : (fs.existsSync(eb[0]) ? eb[0] : 'electron-builder');
+if (!fs.existsSync(path.join(ROOT, 'node_modules', 'electron-builder'))) {
+  console.error('electron-builder is not installed. Run npm install first.');
+  process.exit(1);
+}
 
 const ebArgs = [];
 if (wantWin) {
@@ -55,11 +63,7 @@ if (wantWin) {
 }
 ebArgs.push('--publish', 'never');
 
-const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-if (!fs.existsSync(path.join(ROOT, 'node_modules', 'electron-builder'))) {
-  console.error('electron-builder is not installed. Run npm install first.');
-  process.exit(1);
-}
-run(ebBin, ebArgs);
+// npx.cmd must be launched with shell:true on Windows (see spawn .cmd EINVAL).
+run(WIN ? 'npx.cmd' : 'npx', ['electron-builder', ...ebArgs]);
 
 console.log('pack artifacts under dist/');

@@ -140,9 +140,12 @@ def test_pack_config(failures: list) -> None:
     check('electron-builder' in (pkg.get('devDependencies') or {}),
           'electron-builder dep', str((pkg.get('devDependencies') or {}).get('electron-builder')),
           failures)
-    check('findPython' in (SOURCE / 'src' / 'runtime.js').read_text(encoding='utf-8')
-          and 'python.exe' in (SOURCE / 'src' / 'runtime.js').read_text(encoding='utf-8'),
-          'runtime.js win python', 'findPython', failures)
+    packJs = (SOURCE / 'scripts' / 'pack.js').read_text(encoding='utf-8')
+    check('npx.cmd' in packJs and 'shell: WIN' in packJs,
+          'pack.js windows spawn via npx.cmd + shell', 'present', failures)
+    rt = (SOURCE / 'src' / 'runtime.js').read_text(encoding='utf-8')
+    check('findPython' in rt and 'python.exe' in rt, 'runtime.js win python',
+          'findPython', failures)
 
 
 def test_no_secrets(failures: list) -> None:
