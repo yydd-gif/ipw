@@ -11,7 +11,7 @@
     <span class="appdot"></span>
     <span class="title-text" id="titleText">验收资料编辑软件 — 未打开工程</span>
     <span class="dirty hidden" id="dirtyMark">*</span>
-    <span class="winbtns">P6 E1</span>
+    <span class="winbtns">P7 E1</span>
   </div>
   <div class="banner" id="modeBanner">编辑内核：E1 表单 + 只读预览（V3 保真写回未放行）</div>
   <div class="menubar">
@@ -19,6 +19,7 @@
     <button class="menu-item" data-act="noop">编辑</button>
     <button class="menu-item" data-act="ledger">视图</button>
     <button class="menu-item" data-act="info">工程</button>
+    <button class="menu-item" data-act="health">体检</button>
     <button class="menu-item" data-act="about">帮助</button>
   </div>
   <div class="ribbon">
@@ -29,6 +30,7 @@
         <button class="ri" data-act="save" id="btnSave"><span class="ri-ico">💾</span><span class="ri-lb">保存</span></button>
         <button class="ri" data-act="info"><span class="ri-ico">i</span><span class="ri-lb">工程信息</span></button>
         <button class="ri" data-act="booklet"><span class="ri-ico">📚</span><span class="ri-lb">一键成册</span></button>
+        <button class="ri" data-act="health"><span class="ri-ico">☑</span><span class="ri-lb">模板体检</span></button>
       </div>
       <div class="rg-name">工程</div>
     </div>
@@ -58,6 +60,7 @@
       <div class="rg-items">
         <button class="ri" disabled title="P7+"><span class="ri-ico">💬</span><span class="ri-lb">客服</span></button>
         <button class="ri" disabled title="P6+"><span class="ri-ico">🛒</span><span class="ri-lb">商城</span></button>
+        <button class="ri" data-act="manual"><span class="ri-ico">📘</span><span class="ri-lb">使用手册</span></button>
         <button class="ri" data-act="about"><span class="ri-ico">?</span><span class="ri-lb">关于</span></button>
         <button class="ri" data-act="quit"><span class="ri-ico">⎋</span><span class="ri-lb">退出</span></button>
       </div>
@@ -144,7 +147,7 @@
     <div class="dlg-h">关于</div>
     <div class="dlg-b">
       <p><b>验收资料的自动生成与管理系统，内建够用的文档编辑能力。</b></p>
-      <p>不是 Office 替代品。P6：E1 表单 + 子表网格 + 日志→周报/月报（确定性聚合）+ AI 起草/润色/扩写/智能填表/查错。V3 保真写回未放行，不做 E2/E3 内核。凭据只走 DEEPSEEK_API_KEY 环境变量；断网或无 Key 时 AI 入口全部置灰。</p>
+      <p>不是 Office 替代品。P7：E1 表单 + 子表网格 + 日志→周报/月报 + 可选 AI。安装包 / 免安装包内嵌引擎与模板；干净 Windows 不要求系统 Python / Node。V3 保真写回未放行，不做 E2/E3 内核。凭据只走 DEEPSEEK_API_KEY 环境变量；断网或无 Key 时 AI 入口全部置灰。</p>
       <p id="aboutFidelity"></p>
     </div>
     <div class="dlg-f"><button class="btn pri" data-close="dlgAbout">关闭</button></div>
@@ -207,6 +210,21 @@
       <pre id="qaBody" class="qa-pre"></pre>
     </div>
     <div class="dlg-f"><button class="btn pri" data-close="dlgQa">关闭</button></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="dlgHealth">
+  <div class="dialog wide health">
+    <div class="dlg-h">模板资产体检</div>
+    <div class="dlg-b">
+      <p class="sync-intro">对照冻结备份与占位符口径检查安装资产。不写 <code>assets/templates/</code>。已知 2 份 SHA 漂移是故意 fail-loud（内容零丢失）。</p>
+      <div id="healthSummary" class="health-sum">尚未运行</div>
+      <div id="healthList" class="health-list"></div>
+    </div>
+    <div class="dlg-f">
+      <button class="btn" data-close="dlgHealth">关闭</button>
+      <button class="btn pri" id="btnHealthGo">开始体检</button>
+    </div>
   </div>
 </div>
 

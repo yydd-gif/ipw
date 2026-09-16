@@ -25,6 +25,8 @@ contextBridge.exposeInMainWorld('api', {
   aiApply: (opts) => ipcRenderer.invoke('ai-apply', opts),
   aiQa: (projectPath) => ipcRenderer.invoke('ai-qa', projectPath),
   aggregate: (opts) => ipcRenderer.invoke('aggregate', opts),
+  health: () => ipcRenderer.invoke('health'),
+  openManual: () => ipcRenderer.invoke('open-manual'),
   onProgress: (cb) => {
     const fn = (_e, line) => cb(line);
     ipcRenderer.on('engine-progress', fn);

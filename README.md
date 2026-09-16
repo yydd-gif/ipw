@@ -4,7 +4,7 @@
 
 **建一个工程 = 建一个文件夹；点一次「一键成册」= 套完 37 份模板并填好 39 个字段。**
 
-当前进度：**P6 AI 能力落地**（P0 填充回归仍保持 37 份 / 171 处 / 0 残留；P1–P5 保持绿）。编辑内核走 **E1 表单 + 只读预览 + 8 张子表网格**（V1 `pnpm add @genoffice/docx-engine` 为 npm 404，V3 产品路径 BLOCKED，不假装通过；不做 E2/E3 流式内核）。日志→周报→月报走**确定性规则引擎**，不让模型编造事实。凭据只走 `DEEPSEEK_API_KEY` 环境变量。
+当前进度：**P7 交付固化**（P0 填充回归仍保持 37 份 / 171 处 / 0 残留；P1–P6 保持绿）。编辑内核走 **E1 表单 + 只读预览 + 8 张子表网格**（V1 `pnpm add @genoffice/docx-engine` 为 npm 404，V3 产品路径 BLOCKED，不假装通过；不做 E2/E3 流式内核）。发行包内嵌引擎、模板与便携 Python；**dsh 运行时约 420MB，基础包默认不含**。凭据只走 `DEEPSEEK_API_KEY` 环境变量。
 
 > 施工入口请先读 [`docs/00_交付说明.md`](docs/00_交付说明.md) 和 [`docs/设计文档/施工交接说明.md`](docs/设计文档/施工交接说明.md)，不要从设计文档第一页通读。
 
@@ -168,7 +168,30 @@ AI 落盘追加写入工程 `_logs/ai.jsonl` 与 `_logs/changes.jsonl`。智能�
 
 ---
 
-## 仓库布局（双轨制）
+## 怎么跑 P7（交付固化）
+
+用户手册：[`docs/使用手册.md`](docs/使用手册.md)。打包与 Windows 目标：[`docs/打包说明.md`](docs/打包说明.md)。
+
+```bash
+python tools/run_health.py              # 模板体检（37 份 / 171 处 / 只读保护）
+python tools/run_p7_regression.py --skip-pack
+npm run p7:smoke                        # 若 dist/linux-unpacked 已存在会顺带验包
+
+# 构建 Linux 烟测包（本机即可）
+npm install
+npm run pack:linux
+
+# Windows 安装包 + 免安装 zip（必须在 Windows 构建机 / GitHub windows-latest）
+npm run pack:win
+```
+
+干净 Windows **不要求**系统 Python / Node：electron-builder 打进去的壳 + `scripts/fetch_python_runtime.py` 拉的 embeddable CPython + vendor 的 pypdf。本 Linux 环境不能交叉链接出 `.exe`，只保证脚本、CI 配置和 linux dir/zip。dsh 运行时默认不打进基础包。
+
+---
+
+## 可选：加装 dsh / AI 运行时
+
+基础发行包**不含**约 420MB 的 dsh 运行时。需要模型后端时再装：
 
 ```bash
 pip install "deepseek-harness-sdk==0.1.5rc1"   # ADR-18：原生 dsh，不依赖系统 Node
@@ -197,14 +220,17 @@ assets/                         ← 安装资产（只读约定）
   templates/                    37 份现役模板（中文分册名，冻结；引擎不得写入）
   templates-backup/             注入后冻结副本 + SHA256清单.json
   spec/                         字段字典 / 表名缩写字典 / 填数规则.yaml（P1 正式 9 类规则）/ 软件目录.docx
-  engine/                       7 个确定性引擎 + P4 export/shell_bridge + P5 子表
-  runtime/                      内嵌 Python 预留位（P7）
-lib/                            project.json 原子读写、字段字典、规则引擎、编号池、CJK PDF、子表/同步
-packages/dsh-yanshou-docs/      P3 组合包 v0.2（七工具 / patch 层 / 模板保护）
-tools/                          体检与回归脚本（含 run_p1 / run_p2 / run_p3_smoke / run_p4_smoke / run_p5_regression.py）
-docs/                           交付说明 + 设计文档 + 原始资料 + AI 组合包指针 + dsh 参考
+  engine/                       确定性引擎 + export/shell_bridge/ai + 体检桥
+  runtime/                      便携 Python 说明（二进制由打包脚本拉到 build/runtime）
+lib/                            project.json、规则、子表、同步、体检、CJK PDF
+  vendor/                       打包时 pip 的 pypdf（gitignore）
+packages/dsh-yanshou-docs/      P3 组合包源码（运行时不打进基础包）
+tools/                          体检与回归（run_health / run_p7_regression 等）
+scripts/                        fetch_python_runtime / prepare_pack / pack.js
+docs/                           使用手册.md · 打包说明.md · 设计文档
 examples/demo_project.json      试跑工程数据
-src/                            Electron 壳 MVP（E1）
+src/                            Electron 壳 E1（含模板体检向导）
+.github/workflows/pack.yml      Linux 烟测 + Windows nsis/zip/portable
 work/                           引擎输出（gitignore；永不指向 templates）
 ```
 
@@ -227,7 +253,7 @@ work/                           引擎输出（gitignore；永不指向 template
 | `aggregate_engine.py` | **P6 可用** | 日志→周报→月报（T7；无源 exit 1） |
 | `ai_engine.py` | **P6 可用** | status/extract/draft/polish/expand/apply/qa；无 Key 不伪造 |
 | `export_engine.py` | **P4 可用** | 单份/整册 PDF（pypdf 合并 + 中文页码） |
-| `shell_bridge.py` | **P6** | Electron JSON 桥：成册/子表/周报/AI 入口/离线闸门 |
+| `shell_bridge.py` | **P7** | Electron JSON 桥：成册/子表/周报/AI 闸门/**模板体检** |
 
 通用约定（[`数据与规则规格.md` §3 / §6](docs/设计文档/数据与规则规格.md)）：具名长参数、`--json` 时 stdout **最后一行**为契约 JSON、`#PROGRESS` 进度行、退出码 `0/1/2/3`。
 
@@ -263,3 +289,4 @@ work/                           引擎输出（gitignore；永不指向 template
 | 接 dsh / AI | `docs/设计文档/P3-AI层接入施工图.md` |
 | 模板资产 | `docs/设计文档/模板占位符标准化规范.md` |
 | 架构意图 | `docs/设计文档/软件设计方案-v2.0.md` |
+| 用户怎么用 / 怎么打包 | `docs/使用手册.md` · `docs/打包说明.md` |

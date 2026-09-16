@@ -20,6 +20,7 @@ from _common import (
     ABBR_PATH, BASE, DICT_PATH, RULES_PATH, SPEC, TEMPLATES,
     TemplateProtectionError, assert_not_template_write,
     emit_progress, emit_result, exit_env, exit_param, result_payload,
+    work_dir,
 )
 
 REPO = BASE.parent
@@ -34,6 +35,7 @@ from lib.field_dict import FieldDictError, load_field_dict  # noqa: E402
 from lib.field_sync import (  # noqa: E402
     apply_all_docs, apply_this_doc, docs_with_field, live_docs,
 )
+from lib.health import run_health  # noqa: E402
 from lib.project_store import ProjectStoreError, read_project, write_project  # noqa: E402
 from lib.rule_engine import load_catalog  # noqa: E402
 from lib.subtable import TABLE_KEYS, assets_from_project  # noqa: E402
@@ -507,6 +509,13 @@ def _run_engine(script: Path, args: list[str], stage: str, timeout: int = 600) -
     print('#STAGE %s start' % stage, flush=True)
     env = os.environ.copy()
     env.setdefault('PYTHONUTF8', '1')
+    extra = [str(REPO)]
+    vendor = REPO / 'lib' / 'vendor'
+    if vendor.is_dir():
+        extra.append(str(vendor))
+    env['PYTHONPATH'] = os.pathsep.join(extra + ([env['PYTHONPATH']] if env.get('PYTHONPATH') else []))
+    if not env.get('YANSHOU_WORK'):
+        env['YANSHOU_WORK'] = str(work_dir())
     proc = subprocess.Popen(
         [sys.executable, str(script), *args],
         cwd=str(REPO), env=env,
@@ -565,7 +574,7 @@ def action_booklet(project_path: Path) -> dict:
     plan_path = logs / 'fillplan' / ('%s.json' % stamp)
     # fill_engine writes template-relative copies; keep them OUT of the
     # project tree so verify --dir does not double-count _logs/fill-run.
-    fill_mirror = REPO / 'work' / 'shell-fill-run' / stamp
+    fill_mirror = work_dir() / 'shell-fill-run' / stamp
     stages = []
 
     stages.append(_run_engine(
@@ -646,7 +655,7 @@ def main() -> int:
                              'trash-list', 'export',
                              'save-assets', 'apply-subtables', 'sync-preview',
                              'ai-status', 'ai-extract', 'ai-rewrite',
-                             'ai-apply', 'ai-qa', 'aggregate'))
+                             'ai-apply', 'ai-qa', 'aggregate', 'health'))
     ap.add_argument('--project', type=Path)
     ap.add_argument('--dir', type=Path)
     ap.add_argument('--fields', default='')
@@ -683,6 +692,16 @@ def main() -> int:
                 True, 'shell',
                 'AI %s（%s）' % ('可用' if data.get('available') else '不可用', data.get('reason')),
                 stats=data)
+            return emit_result(payload, True)
+
+        if a.action == 'health':
+            data = run_health()
+            payload = result_payload(
+                bool(data.get('ok')), 'shell',
+                data.get('summary') or '模板体检',
+                stats=data.get('stats') or {},
+                items=data.get('items') or [],
+                errors=data.get('errors') or [])
             return emit_result(payload, True)
 
         if a.action == 'create':

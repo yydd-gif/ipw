@@ -2,10 +2,26 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const { installRoot, findPython, pythonEnv } = require('./runtime');
 
-const REPO = path.resolve(__dirname, '..');
+const REPO = installRoot({
+  packaged: app.isPackaged,
+  resourcesPath: process.resourcesPath,
+  dirname: __dirname,
+});
 const BRIDGE = path.join(REPO, 'assets', 'engine', 'shell_bridge.py');
-const PYTHON = process.env.PYTHON || process.env.PYTHON3 || 'python3';
+const PYTHON = findPython(REPO, process.platform, process.env);
+
+function resolveWorkDir() {
+  try {
+    if (app.isPackaged) return path.join(app.getPath('userData'), 'work');
+  } catch {
+    /* getPath before ready */
+  }
+  return path.join(REPO, 'work');
+}
+
+let WORK_DIR = path.join(REPO, 'work');
 
 app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('disable-gpu-sandbox');
@@ -65,7 +81,7 @@ function runBridge(args, { onLine } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(PYTHON, [BRIDGE, ...args, '--json'], {
       cwd: REPO,
-      env: { ...process.env, PYTHONUTF8: '1' },
+      env: pythonEnv(REPO, WORK_DIR, process.env),
     });
     let stdout = '';
     let stderr = '';
@@ -102,11 +118,25 @@ function runBridge(args, { onLine } = {}) {
   });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  WORK_DIR = resolveWorkDir();
+  try {
+    fs.mkdirSync(WORK_DIR, { recursive: true });
+  } catch {
+    /* ignore */
+  }
+  createWindow();
+});
 app.on('window-all-closed', () => app.quit());
 
 ipcMain.handle('fidelity', () => loadFidelity());
-ipcMain.handle('repo-info', () => ({ repo: REPO, python: PYTHON }));
+ipcMain.handle('repo-info', () => ({
+  repo: REPO,
+  python: PYTHON,
+  packaged: app.isPackaged,
+  workDir: WORK_DIR,
+  manual: path.join(REPO, 'docs', '使用手册.md'),
+}));
 ipcMain.handle('auto-project', () => process.env.YANSHOU_PROJECT || '');
 
 ipcMain.handle('create-project', async (_e, fields) => {
@@ -196,6 +226,18 @@ ipcMain.handle('export-pdf', async (_e, { projectPath, mode, docId, force }) => 
 
 ipcMain.handle('ai-status', async () => {
   return runBridge(['--action', 'ai-status']);
+});
+
+ipcMain.handle('health', async () => {
+  return runBridge(['--action', 'health']);
+});
+
+ipcMain.handle('open-manual', async () => {
+  const manual = path.join(REPO, 'docs', '使用手册.md');
+  const fallback = path.join(path.resolve(__dirname, '..'), 'docs', '使用手册.md');
+  const target = fs.existsSync(manual) ? manual : fallback;
+  if (fs.existsSync(target)) await shell.openPath(target);
+  return { ok: fs.existsSync(target), path: target };
 });
 
 ipcMain.handle('ai-extract', async (_e, { text, payload }) => {

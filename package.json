@@ -1,9 +1,9 @@
 {
   "name": "yanshou-docs",
   "productName": "验收资料编辑软件",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
-  "description": "P6 Electron E1 shell — aggregate T7 + AI entries with offline gate (no genoffice)",
+  "description": "P7 Electron E1 shell — packaged engines/templates + portable Python (no genoffice, dsh runtime optional)",
   "main": "src/main.js",
   "type": "commonjs",
   "scripts": {
@@ -12,12 +12,19 @@
     "p4:gate": "python3 tools/run_p4_gate.py",
     "p4:smoke": "python3 tools/run_p4_smoke.py",
     "p5:smoke": "python3 tools/run_p5_regression.py",
-    "p6:smoke": "python3 tools/run_p6_regression.py"
+    "p6:smoke": "python3 tools/run_p6_regression.py",
+    "p7:smoke": "python3 tools/run_p7_regression.py",
+    "p7:health": "python3 tools/run_health.py",
+    "pack": "node scripts/pack.js",
+    "pack:linux": "node scripts/pack.js --linux",
+    "pack:win": "node scripts/pack.js --win",
+    "prepare:pack": "python3 scripts/prepare_pack.py"
   },
   "engines": {
     "node": ">=22.14"
   },
   "devDependencies": {
-    "electron": "^33.2.1"
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
   }
 }
