@@ -176,10 +176,10 @@ function runEngine(config, script, args = [], opts = {}) {
 //#endregion
 //#region src/tools.ts
 /**
-* 七块确定性引擎的工具化。
+* 七块确定性引擎的工具化，外加 P6 的抽取 / 改写 / 查错入口。
 *
 * 注册顺序（施工图 §4.8）：datafill → docgen → fill → numbering → verify → aggregate
-* 再加 subtable（P5 已实现 8 张子表行克隆）。
+* 再加 subtable（P5）以及 extract / rewrite / qa（P6；无 Key 不伪造模型回复）。
 *
 * 分工：确定性批处理本身不交给模型推理。模型负责选工具、给参数、解读结果。
 */
@@ -478,24 +478,21 @@ function registerTools(ctx, config) {
 	}));
 	ctx.tools.register(defineTool({
 		name: "yanshou_extract",
-		description: "从一段自然语言或旧资料里抽取项目字段候选值（约 10 个）。抽取结果必须给人确认后才能回写，禁止静默落库。默认走字段字典别名规则（source=rules），不是伪造的模型回复。",
-		parameters: {
-			text: {
-				type: "string",
-				required: true,
-				description: "待抽取的正文"
-			}
-		},
+		description: "从一段自然语言或旧资料里抽取项目字段候选值（约 10 个）。抽取结果必须给人确认后才能用 yanshou_fill / 壳的确认面板回写，禁止静默落库。默认走字段字典别名规则（source=rules），不是伪造的模型回复。",
+		parameters: { text: {
+			type: "string",
+			required: true,
+			description: "待抽取的正文"
+		} },
 		output: textOutput,
 		async execute(args) {
-			const argv = [
+			return fmt("智能填表 · 抽取候选", await runEngine(config, "ai_engine.py", [
 				"--action",
 				"extract",
 				"--json",
 				"--text",
 				String(args?.text ?? "")
-			];
-			return fmt("智能填表 · 抽取候选", await runEngine(config, "ai_engine.py", argv));
+			]));
 		}
 	}));
 	ctx.tools.register(defineTool({
@@ -516,7 +513,7 @@ function registerTools(ctx, config) {
 		output: textOutput,
 		async execute(args) {
 			const mode = String(args?.mode ?? "polish");
-			const argv = [
+			const r = await runEngine(config, "ai_engine.py", [
 				"--action",
 				mode,
 				"--json",
@@ -524,8 +521,8 @@ function registerTools(ctx, config) {
 				resolveProjectFile(config),
 				"--text",
 				String(args?.text ?? "")
-			];
-			return fmt("正文 " + mode, await runEngine(config, "ai_engine.py", argv));
+			]);
+			return fmt("正文 " + mode, r);
 		}
 	}));
 	ctx.tools.register(defineTool({
@@ -534,14 +531,13 @@ function registerTools(ctx, config) {
 		parameters: {},
 		output: textOutput,
 		async execute() {
-			const argv = [
+			return fmt("查错问答", await runEngine(config, "ai_engine.py", [
 				"--action",
 				"qa",
 				"--json",
 				"--project",
 				resolveProjectFile(config)
-			];
-			return fmt("查错问答", await runEngine(config, "ai_engine.py", argv));
+			]));
 		}
 	}));
 }

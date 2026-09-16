@@ -437,12 +437,11 @@ def main() -> int:
         print('\n-- prior P0–P5')
         for script in ('run_regression.py', 'run_p1_regression.py',
                        'run_p2_regression.py', 'run_p3_smoke.py',
-                       'run_p5_regression.py'):
-            extra = ['--skip-prior'] if script in ('run_p5_regression.py',) else []
-            # p5 --skip-prior still runs P5 itself; we want P5 body.
+                       'run_p4_smoke.py', 'run_p5_regression.py'):
+            extra = []
+            if script in ('run_p4_smoke.py', 'run_p5_regression.py'):
+                extra = ['--skip-prior']
             cmd = [sys.executable, str(TOOLS / script), *extra]
-            if script == 'run_p5_regression.py':
-                cmd = [sys.executable, str(TOOLS / script), '--skip-prior']
             proc = run(cmd, timeout=600)
             print(proc.stdout[-1500:] if proc.stdout else '')
             if proc.stderr:
