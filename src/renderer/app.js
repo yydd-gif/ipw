@@ -7,6 +7,9 @@ const state = {
   items: [],
   docs: [],
   fields: [],
+  tables: [],
+  tableKey: 'deviceList',
+  pendingFields: null,
   values: {},
   ledger: null,
   trash: [],
@@ -137,6 +140,123 @@ function collectFields() {
   return out;
 }
 
+function currentTable() {
+  return state.tables.find((t) => t.key === state.tableKey) || state.tables[0];
+}
+
+function renderTables() {
+  if (!state.tables.length) {
+    $('mainPane').innerHTML = '<p class="empty-hint">打开工程后编辑 8 张子表。保存后由 subtable_engine 写入已生成文档（不动模板）。</p>';
+    return;
+  }
+  if (!state.tables.some((t) => t.key === state.tableKey)) {
+    state.tableKey = state.tables[0].key;
+  }
+  const tbl = currentTable();
+  const opts = state.tables.map((t) => (
+    '<option value="' + t.key + '"' + (t.key === tbl.key ? ' selected' : '') + '>' +
+    escapeHtml(t.label) + '</option>'
+  )).join('');
+  const cols = tbl.columns || [];
+  const rows = Array.isArray(tbl.rows) ? tbl.rows : [];
+  const head = cols.map((c) => '<th>' + escapeHtml(c) + '</th>').join('') + '<th></th>';
+  const body = rows.map((row, ri) => {
+    const cells = cols.map((c) => {
+      const v = row && row[c] != null ? row[c] : '';
+      return '<td><input class="sg-cell" data-r="' + ri + '" data-c="' + escapeHtml(c) +
+        '" value="' + escapeHtml(v) + '"></td>';
+    }).join('');
+    return '<tr>' + cells + '<td><button class="mini-btn sg-del" data-r="' + ri + '">删</button></td></tr>';
+  }).join('');
+  $('mainPane').innerHTML =
+    '<div class="subtable">' +
+    '<div class="st-bar">' +
+    '<label>子表 <select id="stSelect">' + opts + '</select></label>' +
+    '<span class="st-note">' + escapeHtml(tbl.note || tbl.usedBy && tbl.usedBy.join('、') || '') + '</span>' +
+    '<span class="tool-sp">' +
+    '<button class="mini-btn" id="stAdd">+ 行</button>' +
+    '<button class="mini-btn" id="stSave">保存并写入文档</button>' +
+    '</span></div>' +
+    '<div class="st-wrap"><table class="sg-tbl"><thead><tr>' + head +
+    '</tr></thead><tbody id="stBody">' + (body || '<tr><td colspan="' + (cols.length + 1) +
+    '" class="empty-hint">暂无数据（空表保留模板静态行）</td></tr>') +
+    '</tbody></table></div></div>';
+  const sel = $('stSelect');
+  if (sel) {
+    sel.addEventListener('change', () => {
+      collectCurrentTable();
+      state.tableKey = sel.value;
+      renderTables();
+    });
+  }
+  $('mainPane').querySelectorAll('.sg-cell').forEach((el) => {
+    el.addEventListener('input', () => {
+      const t = currentTable();
+      if (!t.rows[el.dataset.r]) t.rows[el.dataset.r] = {};
+      t.rows[el.dataset.r][el.dataset.c] = el.value;
+      setDirty(1);
+    });
+  });
+  $('mainPane').querySelectorAll('.sg-del').forEach((el) => {
+    el.addEventListener('click', () => {
+      const t = currentTable();
+      t.rows.splice(Number(el.dataset.r), 1);
+      setDirty(1);
+      renderTables();
+    });
+  });
+  const add = $('stAdd');
+  if (add) {
+    add.addEventListener('click', () => {
+      const t = currentTable();
+      const row = {};
+      (t.columns || []).forEach((c) => { row[c] = ''; });
+      t.rows = t.rows || [];
+      t.rows.push(row);
+      setDirty(1);
+      renderTables();
+    });
+  }
+  const save = $('stSave');
+  if (save) save.addEventListener('click', saveTables);
+}
+
+function collectCurrentTable() {
+  const t = currentTable();
+  if (!t) return;
+  const rows = [];
+  $('mainPane').querySelectorAll('#stBody tr').forEach((tr) => {
+    const cells = tr.querySelectorAll('.sg-cell');
+    if (!cells.length) return;
+    const row = {};
+    cells.forEach((el) => { row[el.dataset.c] = el.value; });
+    rows.push(row);
+  });
+  if (document.getElementById('stBody')) t.rows = rows;
+}
+
+async function saveTables() {
+  if (!state.projectPath) return;
+  collectCurrentTable();
+  const assets = {};
+  state.tables.forEach((t) => { assets[t.key] = t.rows || []; });
+  toast('正在写入子表…');
+  try {
+    const payload = await api.saveAssets({
+      projectPath: state.projectPath,
+      assets,
+      apply: true,
+    });
+    applyOpen(payload);
+    state.view = 'tables';
+    document.querySelectorAll('.etab').forEach((t) => t.classList.toggle('on', t.dataset.view === 'tables'));
+    renderTables();
+    toast(payload.summary || '子表已写入工程文档');
+  } catch (err) {
+    toast('子表保存失败：' + err.message);
+  }
+}
+
 function renderLedger() {
   const L = state.ledger;
   if (!L) {
@@ -228,6 +348,7 @@ function applyOpen(payload) {
   state.items = s.items || [];
   state.docs = s.docs || [];
   state.fields = s.fields || [];
+  state.tables = s.tables || [];
   state.values = s.values || {};
   state.ledger = s.ledger;
   state.trash = s.trash || [];
@@ -239,6 +360,7 @@ function applyOpen(payload) {
   renderFields();
   if (state.view === 'ledger') renderLedger();
   else if (state.view === 'jobs') renderJobs();
+  else if (state.view === 'tables') renderTables();
   else renderPreview();
 }
 
@@ -272,6 +394,7 @@ document.querySelectorAll('.etab').forEach((el) => {
     document.querySelectorAll('.etab').forEach((t) => t.classList.toggle('on', t === el));
     if (state.view === 'ledger') renderLedger();
     else if (state.view === 'jobs') renderJobs();
+    else if (state.view === 'tables') renderTables();
     else renderPreview();
   });
 });
@@ -291,6 +414,9 @@ $('treePane').addEventListener('click', (e) => {
 
 $('btnSync').addEventListener('click', saveFields);
 $('btnSave').addEventListener('click', saveFields);
+$('btnSyncRevert').addEventListener('click', () => confirmSync('revert'));
+$('btnSyncThis').addEventListener('click', () => confirmSync('this'));
+$('btnSyncAll').addEventListener('click', () => confirmSync('all'));
 $('btnCollapse').addEventListener('click', () => {
   state.panelOpen = !state.panelOpen;
   $('fieldPanel').classList.toggle('collapsed', !state.panelOpen);
@@ -347,15 +473,66 @@ $('btnExportGo').addEventListener('click', async () => {
 
 async function saveFields() {
   if (!state.projectPath) return;
+  const fields = collectFields();
   try {
+    const preview = await api.syncPreview({
+      projectPath: state.projectPath,
+      fields,
+    });
+    const changes = (preview.stats && preview.stats.changes) || [];
+    const hasDocs = changes.some((c) => (c.docCount || 0) > 0) || (state.docs || []).some((d) => d.exists);
+    if (changes.length && hasDocs) {
+      state.pendingFields = fields;
+      const n = Math.max(...changes.map((c) => c.docCount || 0), 0);
+      $('syncIntro').textContent =
+        '改动 ' + changes.length + ' 个项目级字段。另有最多 ' + n + ' 份已生成文档可能包含这些字段。';
+      $('syncBody').innerHTML = changes.map((c) => (
+        '<div class="sync-row"><b>' + escapeHtml(c.label || c.key) + '</b>' +
+        '<div class="sync-old">档案值：' + escapeHtml(c.old) + '</div>' +
+        '<div class="sync-new">新值：' + escapeHtml(c.new) + '</div>' +
+        '<div class="sync-n">影响 ' + (c.anchorCount || 0) + ' 份锚点 / ' + (c.docCount || 0) + ' 份文档</div></div>'
+      )).join('');
+      const doc = currentDoc();
+      $('btnSyncThis').disabled = !doc;
+      $('btnSyncThis').title = doc ? '' : '先在目录树选一份已生成的文档';
+      show('dlgSync');
+      return;
+    }
     const payload = await api.saveFields({
       projectPath: state.projectPath,
-      fields: collectFields(),
+      fields,
+      syncMode: 'project',
     });
     applyOpen(payload);
     toast('已写入 project.json');
   } catch (err) {
     toast('保存失败：' + err.message);
+  }
+}
+
+async function confirmSync(mode) {
+  hide('dlgSync');
+  const fields = state.pendingFields;
+  state.pendingFields = null;
+  if (!fields) return;
+  if (mode === 'revert') {
+    renderFields();
+    setDirty(0);
+    toast('已撤销，未写入');
+    return;
+  }
+  const doc = currentDoc();
+  try {
+    const payload = await api.saveFields({
+      projectPath: state.projectPath,
+      fields,
+      relPath: mode === 'this' && doc ? doc.relPath : '',
+      syncMode: mode,
+    });
+    applyOpen(payload);
+    toast(mode === 'this' ? '仅本份已覆盖，其他文档未改' : '已同步到项目档案');
+  } catch (err) {
+    toast('同步失败：' + err.message);
   }
 }
 

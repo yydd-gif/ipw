@@ -27,10 +27,15 @@ if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 from lib.catalog_build import build_catalog_snapshot  # noqa: E402
+from lib.catalog_pages import apply_structure_to_docx  # noqa: E402
 from lib.docx_preview import preview_docx  # noqa: E402
 from lib.field_dict import FieldDictError, load_field_dict  # noqa: E402
+from lib.field_sync import (  # noqa: E402
+    apply_all_docs, apply_this_doc, docs_with_field, live_docs,
+)
 from lib.project_store import ProjectStoreError, read_project, write_project  # noqa: E402
 from lib.rule_engine import load_catalog  # noqa: E402
+from lib.subtable import TABLE_KEYS, assets_from_project  # noqa: E402
 
 ALIAS_PATH = SPEC / '分册别名表.csv'
 ENGINE = BASE / 'engine'
@@ -230,11 +235,13 @@ def _open_payload(project_path: Path) -> dict:
         })
     # user values (non-reserved)
     values = {k: project[k] for k in project if not k.startswith('_')}
+    tables_ui = _tables_payload(project, fd)
     return {
         'projectPath': str(project_path),
         'root': str(root),
         'values': values,
         'fields': fields_ui,
+        'tables': tables_ui,
         'volumes': volumes,
         'items': items,
         'docs': docs,
@@ -244,7 +251,31 @@ def _open_payload(project_path: Path) -> dict:
         'requiredMissing': [k for k in REQUIRED if not str(project.get(k) or '').strip()],
         'schema': project.get('_schema'),
         'editorMode': 'E1',
+        'syncCapable': True,
     }
+
+
+def _tables_payload(project: dict, fd) -> list:
+    assets = project.get('_assets') or {}
+    extracted = assets_from_project(project)
+    out = []
+    for key in TABLE_KEYS:
+        spec = fd.tables.get(key)
+        if spec is None:
+            continue
+        rows = extracted.get(key)
+        if rows is None:
+            # aliases already handled; also raw key inside assets
+            rows = assets.get(key) or []
+        out.append({
+            'key': spec.key,
+            'label': spec.label,
+            'columns': list(spec.columns),
+            'usedBy': list(spec.used_by),
+            'note': spec.note,
+            'rows': rows if isinstance(rows, list) else [],
+        })
+    return out
 
 
 def action_create(folder: Path, fields: dict) -> dict:
@@ -282,11 +313,23 @@ def action_create(folder: Path, fields: dict) -> dict:
     return _open_payload(pj)
 
 
-def action_save_fields(project_path: Path, fields: dict, rel_path: str = '') -> dict:
+def action_save_fields(project_path: Path, fields: dict, rel_path: str = '',
+                       sync_mode: str = 'project') -> dict:
+    """sync_mode: project (P4 default) | this (仅本份) | all (同步全册)."""
+    mode = (sync_mode or 'project').lower()
+    now = _now()
+    if mode == 'this':
+        if not rel_path:
+            raise ValueError('仅本份需要当前文档路径 --rel-path')
+        apply_this_doc(project_path, rel_path, fields, now)
+        return _open_payload(project_path)
+    if mode == 'all':
+        apply_all_docs(project_path, fields, now, skip_overridden=True)
+        return _open_payload(project_path)
+
     project = read_project(project_path, apply_migration=True)
     fd = load_field_dict(DICT_PATH)
     enabled = fd.enabled
-    now = _now()
     sources = project.setdefault('_fieldSources', {})
     if rel_path:
         ov = project.setdefault('_documents', {}).setdefault(rel_path, {})
@@ -294,7 +337,7 @@ def action_save_fields(project_path: Path, fields: dict, rel_path: str = '') -> 
             if k.startswith('_') or k not in enabled:
                 continue
             ov[k] = v
-            sources[k] = {'source': 'S1', 'ruleId': '', 'at': now, 'by': 'manual'}
+            # 文档级覆盖不改项目级 _fieldSources（避免「仅本份」污染档案）
     else:
         for k, v in fields.items():
             if k.startswith('_') or k not in enabled:
@@ -305,6 +348,76 @@ def action_save_fields(project_path: Path, fields: dict, rel_path: str = '') -> 
             sources[k] = {'source': 'S1', 'ruleId': '', 'at': now, 'by': 'manual'}
     write_project(project_path, project, backup=True)
     return _open_payload(project_path)
+
+
+def action_sync_preview(project_path: Path, fields: dict) -> dict:
+    project = read_project(project_path, apply_migration=False)
+    root = _root(project_path)
+    fd = load_field_dict(DICT_PATH)
+    changes = []
+    for k, v in fields.items():
+        if k.startswith('_') or k not in fd.enabled or k == 'docNo':
+            continue
+        old = project.get(k)
+        if str(old if old is not None else '') == str(v if v is not None else ''):
+            continue
+        docs = docs_with_field(root, project, k)
+        exist = [d for d in docs if d.get('exists')]
+        anchored = [d for d in exist if d.get('hasAnchor')]
+        changes.append({
+            'key': k,
+            'label': (fd.get(k).label if fd.get(k) else k),
+            'old': old if old is not None else '',
+            'new': v if v is not None else '',
+            'docCount': len(exist),
+            'anchorCount': len(anchored),
+        })
+    return {'changes': changes, 'docTotal': len(live_docs(project))}
+
+
+def action_save_assets(project_path: Path, assets: dict, apply: bool = True) -> dict:
+    project = read_project(project_path, apply_migration=True)
+    current = project.setdefault('_assets', {})
+    if not isinstance(assets, dict):
+        raise ValueError('_assets 必须是 object')
+    # store under spec aliases (devices / softwares / …)
+    from lib.rule_engine import TABLE_ASSET_MAP
+    for key, rows in assets.items():
+        if key not in TABLE_KEYS:
+            continue
+        if not isinstance(rows, list):
+            continue
+        aliases = TABLE_ASSET_MAP.get(key) or (key,)
+        current[aliases[0]] = rows
+        # keep canonical key too for round-trip
+        current[key] = rows
+    write_project(project_path, project, backup=True)
+    applied = []
+    if apply:
+        applied = action_apply_subtables(project_path).get('applied') or []
+    payload = _open_payload(project_path)
+    payload['subtableApplied'] = applied
+    return payload
+
+
+def action_apply_subtables(project_path: Path) -> dict:
+    project = read_project(project_path, apply_migration=False)
+    root = _root(project_path)
+    applied = []
+    for did, rec in live_docs(project):
+        rel = rec.get('relPath') or ''
+        path = root / rel
+        if not path.is_file() or path.suffix.lower() != '.docx':
+            continue
+        try:
+            assert_not_template_write(path)
+            info = apply_structure_to_docx(path, project)
+            applied.append({'docId': did, 'relPath': rel, 'result': info})
+        except TemplateProtectionError:
+            continue
+        except (OSError, ValueError):
+            applied.append({'docId': did, 'relPath': rel, 'error': True})
+    return {'applied': applied, 'count': len(applied)}
 
 
 def action_mark_printed(project_path: Path, doc_id: str, printed: bool = True) -> dict:
@@ -528,12 +641,17 @@ def main() -> int:
     ap.add_argument('--action', required=False, default='',
                     choices=('create', 'open', 'save-fields', 'booklet',
                              'mark-printed', 'preview', 'dict', 'trash-put',
-                             'trash-list', 'export'))
+                             'trash-list', 'export',
+                             'save-assets', 'apply-subtables', 'sync-preview'))
     ap.add_argument('--project', type=Path)
     ap.add_argument('--dir', type=Path)
     ap.add_argument('--fields', default='')
     ap.add_argument('--doc-id', dest='doc_id', default='')
     ap.add_argument('--rel-path', dest='rel_path', default='')
+    ap.add_argument('--sync-mode', dest='sync_mode', default='project',
+                    choices=('project', 'this', 'all'))
+    ap.add_argument('--assets', default='')
+    ap.add_argument('--apply', dest='apply', default='true')
     ap.add_argument('--printed', dest='printed', default='true')
     ap.add_argument('--mode', default='booklet')
     ap.add_argument('--out', type=Path)
@@ -571,8 +689,26 @@ def main() -> int:
 
         if a.action == 'save-fields':
             fields = json.loads(a.fields or '{}')
-            data = action_save_fields(pj, fields, a.rel_path)
+            data = action_save_fields(pj, fields, a.rel_path, a.sync_mode)
             payload = result_payload(True, 'shell', '已保存字段', stats=data)
+            return emit_result(payload, True)
+
+        if a.action == 'sync-preview':
+            fields = json.loads(a.fields or '{}')
+            data = action_sync_preview(pj, fields)
+            payload = result_payload(True, 'shell', '同步预览', stats=data)
+            return emit_result(payload, True)
+
+        if a.action == 'save-assets':
+            assets = json.loads(a.assets or a.fields or '{}')
+            apply = str(a.apply).lower() not in ('0', 'false', 'no')
+            data = action_save_assets(pj, assets, apply=apply)
+            payload = result_payload(True, 'shell', '已保存子表', stats=data)
+            return emit_result(payload, True)
+
+        if a.action == 'apply-subtables':
+            data = action_apply_subtables(pj)
+            payload = result_payload(True, 'shell', '已回写子表', stats=data)
             return emit_result(payload, True)
 
         if a.action == 'mark-printed':

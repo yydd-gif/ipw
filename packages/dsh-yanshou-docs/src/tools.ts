@@ -15,7 +15,7 @@ import { assertWritable } from './policy'
  * 七块确定性引擎的工具化。
  *
  * 注册顺序（施工图 §4.8）：datafill → docgen → fill → numbering → verify → aggregate
- * 再加 subtable（P5 骨架已有 CLI，先注册以免模型拿到「脚本不存在」；真正行克隆留 P5）。
+ * 再加 subtable（P5 已实现 8 张子表行克隆）。
  *
  * 分工：确定性批处理本身不交给模型推理。模型负责选工具、给参数、解读结果。
  */
@@ -328,7 +328,7 @@ export function registerTools(ctx: Context, config: Config): void {
       description:
         '识别文档中的清单型表格，按表头列名匹配后接管数据行：数据不足则克隆行，多余则删除行。' +
         '模板侧不含任何子表标记，识别完全靠表头列名序列 —— 所以不要改模板表头文字。' +
-        'P3 阶段引擎仍是 P0 骨架（P5 才做行克隆）；调用会得到明确的 not-implemented 摘要，而不是「脚本不存在」。',
+        'P5 已实现 8 张子表行克隆（不动 w:tblGrid；空数组保留静态表）。',
       parameters: {
         docPath: { type: 'string', required: true, description: '目标文档路径。映射 --doc' },
         tableKey: {

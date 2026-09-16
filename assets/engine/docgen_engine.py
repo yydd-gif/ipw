@@ -125,6 +125,12 @@ def fill_from_template(tpl: Path, dest: Path, project: dict, plan, meta, enabled
         values['docNo'] = doc_no
     process_docx(tpl, dest, values, meta, enabled, records, rel_path,
                  anchor=anchor, plan=plan)
+    try:
+        from lib.catalog_pages import apply_structure_to_docx
+        apply_structure_to_docx(dest, project)
+    except Exception:
+        # structure pass must not abort 成册; P5 regression covers it
+        pass
     return sorted({r['key'] for r in records if r['状态'] == '已填充'
                    and r['文件'] == rel_path})
 

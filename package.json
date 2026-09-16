@@ -1,16 +1,17 @@
 {
   "name": "yanshou-docs",
   "productName": "验收资料编辑软件",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
-  "description": "P4 Electron shell MVP — drives Python engines via child_process (E1 form + read-only preview)",
+  "description": "P5 Electron E1 shell — subtables + half-auto field sync (no genoffice)",
   "main": "src/main.js",
   "type": "commonjs",
   "scripts": {
     "dev": "electron .",
     "start": "electron .",
     "p4:gate": "python3 tools/run_p4_gate.py",
-    "p4:smoke": "python3 tools/run_p4_smoke.py"
+    "p4:smoke": "python3 tools/run_p4_smoke.py",
+    "p5:smoke": "python3 tools/run_p5_regression.py"
   },
   "engines": {
     "node": ">=22.14"

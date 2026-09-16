@@ -141,10 +141,33 @@ ipcMain.handle('open-path', async (_e, dir) => {
   return payload;
 });
 
-ipcMain.handle('save-fields', async (_e, { projectPath, fields, relPath }) => {
+ipcMain.handle('save-fields', async (_e, { projectPath, fields, relPath, syncMode }) => {
   const args = ['--action', 'save-fields', '--project', projectPath, '--fields', JSON.stringify(fields || {})];
   if (relPath) args.push('--rel-path', relPath);
+  if (syncMode) args.push('--sync-mode', syncMode);
   return runBridge(args);
+});
+
+ipcMain.handle('sync-preview', async (_e, { projectPath, fields }) => {
+  return runBridge([
+    '--action', 'sync-preview',
+    '--project', projectPath,
+    '--fields', JSON.stringify(fields || {}),
+  ]);
+});
+
+ipcMain.handle('save-assets', async (_e, { projectPath, assets, apply }) => {
+  const args = [
+    '--action', 'save-assets',
+    '--project', projectPath,
+    '--assets', JSON.stringify(assets || {}),
+  ];
+  if (apply === false) args.push('--apply', 'false');
+  return runBridge(args);
+});
+
+ipcMain.handle('apply-subtables', async (_e, projectPath) => {
+  return runBridge(['--action', 'apply-subtables', '--project', projectPath]);
 });
 
 ipcMain.handle('booklet', async (_e, projectPath) => {
