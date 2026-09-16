@@ -11,7 +11,7 @@
     <span class="appdot"></span>
     <span class="title-text" id="titleText">验收资料编辑软件 — 未打开工程</span>
     <span class="dirty hidden" id="dirtyMark">*</span>
-    <span class="winbtns">P5 E1</span>
+    <span class="winbtns">P6 E1</span>
   </div>
   <div class="banner" id="modeBanner">编辑内核：E1 表单 + 只读预览（V3 保真写回未放行）</div>
   <div class="menubar">
@@ -39,12 +39,24 @@
         <button class="ri" data-act="export"><span class="ri-ico">⬆</span><span class="ri-lb">导出 PDF</span></button>
         <button class="ri" data-act="ledger"><span class="ri-ico">☰</span><span class="ri-lb">台账</span></button>
         <button class="ri" data-act="find"><span class="ri-ico">⌕</span><span class="ri-lb">查找</span></button>
+        <button class="ri" data-act="weekly"><span class="ri-ico">📅</span><span class="ri-lb">生成周报</span></button>
+        <button class="ri" data-act="monthly"><span class="ri-ico">📆</span><span class="ri-lb">生成月报</span></button>
       </div>
       <div class="rg-name">文档</div>
     </div>
+    <div class="rg" id="aiRibbon">
+      <div class="rg-items">
+        <button class="ri ai-only" data-act="ai-draft" disabled title="需要 DEEPSEEK_API_KEY 且联网"><span class="ri-ico">✎</span><span class="ri-lb">起草</span></button>
+        <button class="ri ai-only" data-act="ai-polish" disabled title="需要 DEEPSEEK_API_KEY 且联网"><span class="ri-ico">✦</span><span class="ri-lb">润色</span></button>
+        <button class="ri ai-only" data-act="ai-expand" disabled title="需要 DEEPSEEK_API_KEY 且联网"><span class="ri-ico">▣</span><span class="ri-lb">扩写</span></button>
+        <button class="ri ai-only" data-act="ai-fill" disabled title="需要 DEEPSEEK_API_KEY 且联网"><span class="ri-ico">⌘</span><span class="ri-lb">智能填表</span></button>
+        <button class="ri ai-only" data-act="ai-qa" disabled title="需要 DEEPSEEK_API_KEY 且联网"><span class="ri-ico">?</span><span class="ri-lb">查错问答</span></button>
+      </div>
+      <div class="rg-name">AI</div>
+    </div>
     <div class="rg">
       <div class="rg-items">
-        <button class="ri" disabled title="P6+"><span class="ri-ico">💬</span><span class="ri-lb">客服</span></button>
+        <button class="ri" disabled title="P7+"><span class="ri-ico">💬</span><span class="ri-lb">客服</span></button>
         <button class="ri" disabled title="P6+"><span class="ri-ico">🛒</span><span class="ri-lb">商城</span></button>
         <button class="ri" data-act="about"><span class="ri-ico">?</span><span class="ri-lb">关于</span></button>
         <button class="ri" data-act="quit"><span class="ri-ico">⎋</span><span class="ri-lb">退出</span></button>
@@ -93,6 +105,7 @@
     <span id="sbDone">本册完成度 —</span>
     <span class="sb-r">
       <span id="sbDirty">未保存更改 0 处</span>
+      <span id="sbAi">AI 离线</span>
       <span>模板资产 v1.0（37 份）</span>
       <span>只读保护：开</span>
     </span>
@@ -131,7 +144,7 @@
     <div class="dlg-h">关于</div>
     <div class="dlg-b">
       <p><b>验收资料的自动生成与管理系统，内建够用的文档编辑能力。</b></p>
-      <p>不是 Office 替代品。P5：E1 表单 + 8 张子表网格 + 半自动同步。V3 保真写回未放行，不做 E2/E3 内核。确定性内核仍是 Python 引擎，本壳只通过 child_process 调用。</p>
+      <p>不是 Office 替代品。P6：E1 表单 + 子表网格 + 日志→周报/月报（确定性聚合）+ AI 起草/润色/扩写/智能填表/查错。V3 保真写回未放行，不做 E2/E3 内核。凭据只走 DEEPSEEK_API_KEY 环境变量；断网或无 Key 时 AI 入口全部置灰。</p>
       <p id="aboutFidelity"></p>
     </div>
     <div class="dlg-f"><button class="btn pri" data-close="dlgAbout">关闭</button></div>
@@ -151,6 +164,49 @@
       <button class="btn" id="btnSyncThis">仅本份</button>
       <button class="btn pri" id="btnSyncAll">同步全册</button>
     </div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="dlgRewrite">
+  <div class="dialog wide">
+    <div class="dlg-h" id="rwTitle">AI 起草</div>
+    <div class="dlg-b">
+      <div class="fld"><label>原文 / 要点</label><textarea id="rwSrc" rows="5" placeholder="粘贴要处理的正文。模型不得编造工程事实。"></textarea></div>
+      <div class="fld"><label>结果（确认后才写入字段面板）</label><textarea id="rwOut" rows="6" readonly></textarea></div>
+      <p class="fp-hint" id="rwHint">断网或无 Key 时此入口不可用。</p>
+    </div>
+    <div class="dlg-f">
+      <button class="btn" data-close="dlgRewrite">取消</button>
+      <button class="btn" id="btnRwRun">生成</button>
+      <button class="btn pri" id="btnRwApply" disabled>写入当前字段</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="dlgExtract">
+  <div class="dialog wide">
+    <div class="dlg-h">智能填表 · 待确认</div>
+    <div class="dlg-b">
+      <div class="fld"><label>粘贴一段文字或旧资料</label><textarea id="exSrc" rows="5" placeholder="工程名称：……&#10;建设单位：……"></textarea></div>
+      <p class="fp-hint">抽取约 10 个字段候选。不勾选的不会回写。source=rules 的候选不是模型回复。</p>
+      <div id="exCands" class="cand-list"></div>
+    </div>
+    <div class="dlg-f">
+      <button class="btn" data-close="dlgExtract">取消</button>
+      <button class="btn" id="btnExRun">抽取</button>
+      <button class="btn pri" id="btnExApply" disabled>回写已勾选</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="dlgQa">
+  <div class="dialog wide">
+    <div class="dlg-h">查错问答</div>
+    <div class="dlg-b">
+      <p id="qaSummary" class="sync-intro">先跑校验闸门，再视网络决定是否让模型解说。模型失败不会伪造答复。</p>
+      <pre id="qaBody" class="qa-pre"></pre>
+    </div>
+    <div class="dlg-f"><button class="btn pri" data-close="dlgQa">关闭</button></div>
   </div>
 </div>
 

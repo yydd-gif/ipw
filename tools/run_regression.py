@@ -240,7 +240,7 @@ def main() -> int:
         (['docgen_engine.py', '--project', str(sandbox_pj), '--item', '二-01',
           '--out', str(sandbox), '--json'], 0),
         (['numbering_engine.py', '--project', str(sandbox_pj), '--item', '二-02', '--json'], 0),
-        (['aggregate_engine.py', '--period', 'week', '--project', str(demo), '--json'], 0),
+        (['aggregate_engine.py', '--period', 'week', '--project', str(demo), '--json'], 1),
         (['subtable_engine.py', '--doc', str(subtable_copy), '--json'], 0),
         (['verify_engine.py', '--dir', str(out_dir), '--json'], 0),
         (['datafill_engine.py', '--json'], 2),

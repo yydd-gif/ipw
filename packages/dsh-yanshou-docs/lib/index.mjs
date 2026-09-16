@@ -404,7 +404,7 @@ function registerTools(ctx, config) {
 	}));
 	ctx.tools.register(defineTool({
 		name: "yanshou_aggregate",
-		description: "把施工日志按周/月聚合生成项目周报与月报。窗口内没有源日志时直接失败，不生成空文档。这是唯一需要模型参与生成的引擎：引擎负责取数与写入，模型的归纳在调用之前完成。本工具本身仍是确定性的，不会替你起草正文。",
+		description: "把施工日志按周/月聚合生成项目周报与月报。窗口内没有源日志时直接失败，不生成空文档。确定性规则引擎（aggregate/statistic/count）取数与四栏写入，不调用模型、不编造事实。",
 		parameters: {
 			period: {
 				type: "string",
@@ -474,6 +474,74 @@ function registerTools(ctx, config) {
 			if (args?.tableKey) argv.push("--table", String(args.tableKey));
 			if (args?.dataFile) argv.push("--data", String(args.dataFile));
 			return fmt("清单表接管 · 子表识别引擎", await runEngine(config, "subtable_engine.py", argv));
+		}
+	}));
+	ctx.tools.register(defineTool({
+		name: "yanshou_extract",
+		description: "从一段自然语言或旧资料里抽取项目字段候选值（约 10 个）。抽取结果必须给人确认后才能回写，禁止静默落库。默认走字段字典别名规则（source=rules），不是伪造的模型回复。",
+		parameters: {
+			text: {
+				type: "string",
+				required: true,
+				description: "待抽取的正文"
+			}
+		},
+		output: textOutput,
+		async execute(args) {
+			const argv = [
+				"--action",
+				"extract",
+				"--json",
+				"--text",
+				String(args?.text ?? "")
+			];
+			return fmt("智能填表 · 抽取候选", await runEngine(config, "ai_engine.py", argv));
+		}
+	}));
+	ctx.tools.register(defineTool({
+		name: "yanshou_rewrite",
+		description: "对正文做起草 / 润色 / 扩写。必须有 DEEPSEEK_API_KEY 且能访问 api.deepseek.com。无 Key 或断网时工具失败，不会编造一段假正文冒充模型。不得编造工程事实。",
+		parameters: {
+			mode: {
+				type: "string",
+				required: true,
+				description: "draft / polish / expand"
+			},
+			text: {
+				type: "string",
+				required: true,
+				description: "原文或要点"
+			}
+		},
+		output: textOutput,
+		async execute(args) {
+			const mode = String(args?.mode ?? "polish");
+			const argv = [
+				"--action",
+				mode,
+				"--json",
+				"--project",
+				resolveProjectFile(config),
+				"--text",
+				String(args?.text ?? "")
+			];
+			return fmt("正文 " + mode, await runEngine(config, "ai_engine.py", argv));
+		}
+	}));
+	ctx.tools.register(defineTool({
+		name: "yanshou_qa",
+		description: "查错问答：先跑 yanshou_verify 校验闸门，有模型时再解说。断网或无 Key 时失败（壳侧入口置灰），不会伪造问答。",
+		parameters: {},
+		output: textOutput,
+		async execute() {
+			const argv = [
+				"--action",
+				"qa",
+				"--json",
+				"--project",
+				resolveProjectFile(config)
+			];
+			return fmt("查错问答", await runEngine(config, "ai_engine.py", argv));
 		}
 	}));
 }

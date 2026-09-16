@@ -22,6 +22,9 @@ const state = {
   dirty: false,
   panelOpen: true,
   jobs: [],
+  ai: { available: false, reason: 'no-api-key', hasKey: false },
+  rewriteMode: 'polish',
+  rewriteTarget: 'projectBackground',
 };
 
 function $(id) { return document.getElementById(id); }
@@ -34,8 +37,36 @@ function setDirty(n) {
   $('sbDirty').textContent = '未保存更改 ' + n + ' 处';
 }
 
-function toast(msg) {
-  $('sbEngine').textContent = msg;
+function applyAiGate(status) {
+  if (status && typeof status === 'object') {
+    state.ai = Object.assign({}, state.ai, status.available != null ? status : (status.stats || status));
+    if (status.stats && status.stats.available != null) state.ai = Object.assign({}, state.ai, status.stats);
+    if (status.available != null) state.ai.available = status.available;
+    if (status.reason) state.ai.reason = status.reason;
+    if (status.hasKey != null) state.ai.hasKey = status.hasKey;
+  }
+  const on = !!state.ai.available;
+  document.querySelectorAll('.ai-only').forEach((el) => {
+    el.disabled = !on;
+    el.classList.toggle('ai-off', !on);
+    el.title = on
+      ? 'AI 可用'
+      : ('AI 不可用：' + (state.ai.reason || 'offline') + '（其余功能不受影响）');
+  });
+  const chip = $('sbAi');
+  if (chip) {
+    chip.textContent = on ? 'AI 在线' : ('AI 离线（' + (state.ai.reason || 'no-key') + '）');
+  }
+}
+
+async function refreshAiGate() {
+  try {
+    const payload = await api.aiStatus();
+    const st = (payload && payload.stats) || payload || {};
+    applyAiGate(st);
+  } catch {
+    applyAiGate({ available: false, reason: 'status-error', hasKey: false });
+  }
 }
 
 function fillChip(fill) {
@@ -353,6 +384,7 @@ function applyOpen(payload) {
   state.ledger = s.ledger;
   state.trash = s.trash || [];
   state.printStates = s.printStates || {};
+  if (s.ai) applyAiGate(s.ai);
   const name = state.values.projectName || '未命名工程';
   $('titleText').textContent = '验收资料编辑软件 — ' + name;
   setDirty(0);
@@ -538,6 +570,10 @@ async function confirmSync(mode) {
 
 async function onAct(act) {
   if (act === 'quit') return window.close();
+  if (['ai-draft', 'ai-polish', 'ai-expand', 'ai-fill', 'ai-qa'].includes(act) && !state.ai.available) {
+    toast('AI 不可用：' + (state.ai.reason || 'offline') + '（其余功能不受影响）');
+    return;
+  }
   if (act === 'about') {
     const f = state.fidelity || {};
     $('aboutFidelity').textContent =
@@ -642,8 +678,176 @@ async function onAct(act) {
     show('dlgExport');
     return;
   }
+  if (act === 'weekly' || act === 'monthly') {
+    await runAggregate(act === 'weekly' ? 'week' : 'month');
+    return;
+  }
+  if (act === 'ai-draft' || act === 'ai-polish' || act === 'ai-expand') {
+    openRewrite(act.replace('ai-', ''));
+    return;
+  }
+  if (act === 'ai-fill') {
+    $('exCands').innerHTML = '';
+    $('btnExApply').disabled = true;
+    show('dlgExtract');
+    return;
+  }
+  if (act === 'ai-qa') {
+    await runQa();
+    return;
+  }
   if (act === 'noop') return;
 }
+
+async function runAggregate(period) {
+  if (!state.projectPath) { toast('请先打开工程'); return; }
+  state.view = 'jobs';
+  document.querySelectorAll('.etab').forEach((t) => t.classList.toggle('on', t.dataset.view === 'jobs'));
+  state.jobs = [{ ico: 'run', name: 'aggregate', detail: period + ' 汇总中（确定性规则，不调用模型）', time: '' }];
+  renderJobs();
+  try {
+    const payload = await api.aggregate({ projectPath: state.projectPath, period: period });
+    state.jobs = [{
+      ico: payload.ok ? 'ok' : 'err',
+      name: period === 'week' ? '周报' : '月报',
+      detail: payload.summary || '',
+      time: '',
+    }];
+    renderJobs();
+    if (state.root) applyOpen(await api.openPath(state.root));
+    toast(payload.summary || '汇总结束');
+  } catch (err) {
+    toast('汇总失败：' + err.message);
+  }
+}
+
+function openRewrite(mode) {
+  state.rewriteMode = mode;
+  const titles = { draft: 'AI 起草', polish: 'AI 润色', expand: 'AI 扩写' };
+  $('rwTitle').textContent = titles[mode] || 'AI';
+  $('rwOut').value = '';
+  $('btnRwApply').disabled = true;
+  const bg = (collectFields().projectBackground || state.values.projectBackground || '');
+  if (mode !== 'draft' && bg && !$('rwSrc').value) $('rwSrc').value = bg;
+  $('rwHint').textContent = '模型：' + (state.ai.model || 'deepseek-flash') + '。确认后才写入字段。失败不会伪造正文。';
+  show('dlgRewrite');
+}
+
+async function runQa() {
+  if (!state.projectPath) { toast('请先打开工程'); return; }
+  show('dlgQa');
+  $('qaSummary').textContent = '正在校验…';
+  $('qaBody').textContent = '';
+  try {
+    const payload = await api.aiQa(state.projectPath);
+    const st = payload.stats || {};
+    $('qaSummary').textContent = payload.summary || '';
+    const live = st.liveModel ? ('\n\n【模型解说 · ' + (st.model || '') + '】\n' + (payload.narration || '')) : '\n\n（未调用模型或调用失败，以上为校验闸门原文，不是伪造的模型答复）';
+    $('qaBody').textContent = JSON.stringify(payload.verify || payload.items || {}, null, 2) + live;
+    toast(payload.summary || '查错完成');
+  } catch (err) {
+    $('qaSummary').textContent = '查错失败';
+    $('qaBody').textContent = err.message;
+  }
+}
+
+function renderExtractCands(items) {
+  const box = $('exCands');
+  if (!items.length) {
+    box.innerHTML = '<p class="empty-hint">没有抽到候选</p>';
+    $('btnExApply').disabled = true;
+    return;
+  }
+  box.innerHTML = items.map((c, i) => (
+    '<label class="cand"><input type="checkbox" checked data-i="' + i + '">' +
+    '<span class="k">' + escapeHtml(c.label || c.key) + '</span>' +
+    '<input type="text" data-val="' + i + '" value="' + escapeHtml(c.value || '') + '">' +
+    '<span class="src s-import">' + escapeHtml(c.source || 'rules') + '</span></label>'
+  )).join('');
+  box._items = items;
+  $('btnExApply').disabled = false;
+}
+
+$('btnRwRun').addEventListener('click', async () => {
+  if (!state.ai.available) { toast('AI 不可用'); return; }
+  const text = $('rwSrc').value.trim();
+  if (!text) { toast('请先填写原文'); return; }
+  $('btnRwRun').disabled = true;
+  try {
+    const payload = await api.aiRewrite({
+      projectPath: state.projectPath,
+      mode: state.rewriteMode,
+      text: text,
+    });
+    if (!payload.ok) {
+      $('rwOut').value = '';
+      toast(payload.summary || '模型不可用，未伪造回复');
+      return;
+    }
+    $('rwOut').value = payload.text || ((payload.items || [])[0] && payload.items[0].text) || '';
+    $('btnRwApply').disabled = !$('rwOut').value;
+    toast(payload.summary || '已生成');
+  } catch (err) {
+    $('rwOut').value = '';
+    toast(err.message);
+  } finally {
+    $('btnRwRun').disabled = false;
+  }
+});
+
+$('btnRwApply').addEventListener('click', () => {
+  const text = $('rwOut').value;
+  if (!text) return;
+  const key = state.rewriteTarget || 'projectBackground';
+  const el = document.querySelector('#fieldBody .fp-val[data-key="' + key + '"]');
+  if (el) {
+    el.value = text;
+    setDirty(1);
+  }
+  hide('dlgRewrite');
+  toast('已写入 ' + key + '（尚未点保存）');
+});
+
+$('btnExRun').addEventListener('click', async () => {
+  if (!state.ai.available) { toast('AI 不可用'); return; }
+  const text = $('exSrc').value.trim();
+  if (!text) { toast('请先粘贴资料'); return; }
+  try {
+    const payload = await api.aiExtract({ text: text });
+    renderExtractCands(payload.items || (payload.stats && payload.stats.items) || []);
+    toast(payload.summary || '已抽取');
+  } catch (err) { toast(err.message); }
+});
+
+$('btnExApply').addEventListener('click', async () => {
+  const box = $('exCands');
+  const items = box._items || [];
+  const confirmed = [];
+  box.querySelectorAll('input[type=checkbox]:checked').forEach((cb) => {
+    const i = Number(cb.dataset.i);
+    const src = items[i];
+    if (!src) return;
+    const typed = box.querySelector('input[data-val="' + i + '"]');
+    confirmed.push({
+      key: src.key,
+      label: src.label,
+      value: typed ? typed.value : src.value,
+      source: src.source,
+    });
+  });
+  if (!confirmed.length) { toast('请勾选要回写的字段'); return; }
+  if (!state.projectPath) { toast('请先打开工程'); return; }
+  try {
+    const payload = await api.aiApply({
+      projectPath: state.projectPath,
+      payload: { confirmed: confirmed },
+    });
+    if (!payload.ok) { toast(payload.summary || '回写被拒绝'); return; }
+    hide('dlgExtract');
+    applyOpen(await api.openPath(state.root));
+    toast(payload.summary || '已回写');
+  } catch (err) { toast(err.message); }
+});
 
 api.onProgress((line) => {
   toast(line.replace('#PROGRESS ', '').replace('#STAGE ', '阶段 '));
@@ -673,6 +877,8 @@ api.onProgress((line) => {
   } catch {
     /* ignore */
   }
+  applyAiGate({ available: false, reason: 'pending', hasKey: false });
+  await refreshAiGate();
   try {
     const auto = await api.autoProject();
     if (auto) {

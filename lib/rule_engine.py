@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
+from lib.date_window import Window, in_window, parse_iso_date
 from lib.field_dict import FieldDict, FieldSpec, load_field_dict
 from lib.yaml_lite import YamlLiteError, load_yaml_file
 
@@ -69,6 +70,7 @@ class RuleSet:
     manual_patterns: List[re.Pattern]
     by_target: Dict[str, List[Rule]] = field(default_factory=dict)
     by_id: Dict[str, Rule] = field(default_factory=dict)
+    window: Optional[Window] = None
 
 
 @dataclass
@@ -426,8 +428,11 @@ def dumps_fillplan(plan: dict) -> str:
 
 def resolve_fillplan(project: dict, field_dict: FieldDict, rule_set: RuleSet,
                      catalog: Catalog | None = None,
-                     only: str = '') -> dict:
+                     only: str = '',
+                     window: Optional[Window] = None) -> dict:
     catalog = catalog or Catalog(items=[], by_id={}, volume_alias={}, volume_seq={})
+    if window is not None:
+        rule_set.window = window
     only_id = normalize_item_id(only) if only else ''
     attrs = _eval_conditions(project, rule_set)
     all_docs = _collect_docs(project, catalog)
@@ -579,6 +584,10 @@ def _run_producers(spec: FieldSpec, doc: DocCtx, project: dict, fd: FieldDict,
 
 
 def _skip_rule(rule: Rule, spec: FieldSpec, doc: DocCtx, rs: RuleSet) -> bool:
+    # T7 窗口内的汇总目标文档：只用 aggregate/statistic/count，避免项目级样例正文漏进周报
+    if getattr(rs, 'window', None) is not None and doc.doc_id == '_aggregate':
+        if rule.type == 'direct':
+            return True
     # T7 聚合/统计/计数：不对源文档自己套用
     if rule.type in ('aggregate', 'statistic', 'count'):
         src_id = _source_item_id(rule)
@@ -697,7 +706,7 @@ def _eval_aggregate(rule: Rule, spec: FieldSpec, doc: DocCtx, project: dict,
                     docs_all: List[DocCtx], rs: RuleSet) -> dict:
     from_ = rule.get('from') or {}
     field = from_.get('field')
-    src_docs = _match_source_docs(from_, docs_all)
+    src_docs = _match_source_docs(from_, docs_all, rs)
     transform = rule.get('transform') or {}
     dedup = transform.get('dedup')
     if dedup is None:
@@ -706,14 +715,18 @@ def _eval_aggregate(rule: Rule, spec: FieldSpec, doc: DocCtx, project: dict,
     if join is None:
         join = '；'
     order = transform.get('order') or 'none'
+    skip_values = {_as_text(x).strip() for x in (transform.get('skipValues') or [])}
     values = []
+    use_project_fallback = rs.window is None
     for d in _order_docs(src_docs, order):
         val = d.overrides.get(field)
-        if _is_empty(val):
+        if _is_empty(val) and use_project_fallback:
             val = project.get(field)
         if _is_empty(val):
             continue
         text = _as_text(val)
+        if skip_values and text.strip() in skip_values:
+            continue
         if dedup and text in values:
             continue
         values.append(text)
@@ -737,7 +750,7 @@ def _eval_statistic(rule: Rule, spec: FieldSpec, doc: DocCtx, project: dict,
                     docs_all: List[DocCtx], rs: RuleSet) -> dict:
     from_ = rule.get('from') or {}
     field = from_.get('field')
-    src_docs = _match_source_docs(from_, docs_all)
+    src_docs = _match_source_docs(from_, docs_all, rs)
     transform = rule.get('transform') or {}
     mode = transform.get('mode') or ''
     if spec.key == 'workerCount' and rs.counters.get('weeklyWorkerCount'):
@@ -745,9 +758,10 @@ def _eval_statistic(rule: Rule, spec: FieldSpec, doc: DocCtx, project: dict,
     if spec.key == 'weather' and rs.counters.get('weatherFormat'):
         mode = rs.counters['weatherFormat']
     raw_vals = []
+    use_project_fallback = rs.window is None
     for d in src_docs:
         val = d.overrides.get(field)
-        if _is_empty(val):
+        if _is_empty(val) and use_project_fallback:
             val = project.get(field)
         if not _is_empty(val):
             raw_vals.append(val)
@@ -795,7 +809,7 @@ def _eval_count(rule: Rule, spec: FieldSpec, doc: DocCtx, project: dict,
     mode = transform.get('mode') or 'rows'
     exclude_empty = bool(transform.get('excludeEmpty', True))
     table = from_.get('table')
-    src_docs = _match_source_docs(from_, docs_all)
+    src_docs = _match_source_docs(from_, docs_all, rs)
     n = 0
     if mode == 'docs':
         n = len(src_docs)
@@ -998,7 +1012,19 @@ def _synth_doc_id(rel: str, overrides: dict, cat: Optional[CatalogItem]) -> str:
     return 'D-%s-%s' % (abbr, seq.zfill(2 if len(seq) <= 2 else len(seq)))
 
 
-def _match_source_docs(from_: dict, docs_all: List[DocCtx]) -> List[DocCtx]:
+def _doc_date_iso(doc: DocCtx) -> str:
+    for key in ('logDate', 'docDate', 'weekStart', 'monthStart', 'date'):
+        parsed = parse_iso_date(doc.overrides.get(key))
+        if parsed is not None:
+            return parsed.isoformat()
+    parsed = parse_iso_date(doc.rel_path)
+    if parsed is not None:
+        return parsed.isoformat()
+    return ''
+
+
+def _match_source_docs(from_: dict, docs_all: List[DocCtx],
+                       rs: Optional[RuleSet] = None) -> List[DocCtx]:
     docs_q = from_.get('docs') or {}
     if not isinstance(docs_q, dict):
         return []
@@ -1014,13 +1040,19 @@ def _match_source_docs(from_: dict, docs_all: List[DocCtx]) -> List[DocCtx]:
         if tag:
             continue  # P1: tag 匹配留空（无 tag 索引）
         matched.append(d)
+    window = getattr(rs, 'window', None) if rs is not None else None
+    # FillPlan / P1: no window → do not drop undated docs (dateWithin is T7).
+    if window is not None:
+        matched = [d for d in matched if in_window(_doc_date_iso(d), window)]
     return matched
 
 
 def _order_docs(docs: List[DocCtx], order: str) -> List[DocCtx]:
     if order == 'docNo':
         return sorted(docs, key=lambda d: (str(d.overrides.get('docNo') or ''), d.rel_path))
-    # date | none → 稳定按路径
+    if order == 'date':
+        return sorted(docs, key=lambda d: (_doc_date_iso(d) or '9999-99-99', d.rel_path))
+    # none → 稳定按路径
     return sorted(docs, key=lambda d: d.rel_path)
 
 
