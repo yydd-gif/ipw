@@ -1,0 +1,35 @@
+# 填数规则.yaml — P0 stub
+# Full 9-class rule engine lands in P1 (数据与规则规格.md §4).
+# dateAutoFill is a closed-set hard rule: engines MUST refuse (exit 3)
+# if any rule target hits policies.manualFields.
+version: "1.0"
+policies:
+  dateAutoFill: false
+  subtableMode: program-side
+  manualFields:
+    fields:
+      - startDate
+      - endDate
+      - creationDate
+      - docDate
+      - signDate
+      - logDate
+      - reviewTime
+      - handoverTime
+      - initialAcceptanceDate
+      - acceptanceDate
+      - trialRunStartDate
+      - dataGovernanceDate
+    tables:
+      - expertScoreList
+    patterns:
+      - "^expert.*"
+      - ".*Sign$"
+rules: []
+tables: {}
+counters:
+  weeklyWorkerCount: avgAndPeak
+  logDedup: true
+  weatherFormat: countDays
+  trialRunUserCount: manual
+  trialRunBusinessCount: manual

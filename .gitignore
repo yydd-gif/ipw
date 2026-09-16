@@ -1,0 +1,23 @@
+# engine / tool output (never write into assets/templates)
+work/
+.workbuddy/
+
+# python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.env
+.env.*
+
+# editor / OS
+.DS_Store
+Thumbs.db
+*~
+~$*.docx
+*.swp
+
+# node (P3+)
+node_modules/
+*.tgz

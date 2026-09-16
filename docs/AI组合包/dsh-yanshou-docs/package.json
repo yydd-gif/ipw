@@ -1,0 +1,23 @@
+{
+  "name": "dsh-yanshou-docs",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "lib/index.mjs",
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "prepare": "tsdown"
+  },
+  "devDependencies": {
+    "tsdown": "latest",
+    "typescript": "latest"
+  }
+}

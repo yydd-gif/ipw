@@ -1,0 +1,70 @@
+{
+  "_schema": "yzproj/1.0",
+  "projectName": "岳阳市财政局业务系统信息化建设项目",
+  "contractNo": "YY123",
+  "contractAmount": "286.50",
+  "approvalDocNo": "岳财信批〔2026〕17号",
+  "projectBackground": "为落实数字政府建设要求，提升财政业务办理效率，建设单位决定对现有业务系统进行升级改造，并配套完成机房及综合布线施工。",
+  "projectGoal": "建成覆盖财政核心业务的一体化信息系统，实现数据集中管理、业务协同办理，并通过竣工验收。",
+  "projectContent": "硬件设备采购与安装、软件开发与部署、机房环境改造、综合布线、系统联调与试运行、人员培训及资料移交。",
+  "ownerUnit": "岳阳市财政局",
+  "ownerCreditCode": "11430600000000000X",
+  "constructionUnit": "湖南省俊昇伟业信息科技有限公司",
+  "constructionCreditCode": "91430600MA4L00000Y",
+  "constructionContact": "郭工",
+  "constructionPhone": "0730-8888888",
+  "supervisionUnit": "湖南大福工程咨询有限公司",
+  "supervisionCreditCode": "91430100MA4L11111Z",
+  "supervisionContact": "李工",
+  "supervisionPhone": "0730-6666666",
+  "projectManager": "郭工",
+  "managerIdCard": "430600199001010011",
+  "chiefSupervisor": "李工",
+  "buildSite": "岳阳市财政局办公楼",
+  "projectStage": "竣工验收阶段",
+  "weather": "晴",
+  "todayWork": "完成机房设备上架与综合布线，进行系统联调。",
+  "workerCount": 8,
+  "siteIssue": "无",
+  "coordination": "无",
+  "weeklyDone": "完成设备安装与布线。",
+  "weeklyUndone": "系统联调未完成，原因为设备到货延期。",
+  "weeklyProblem": "设备到货进度滞后。",
+  "weeklyPlan": "完成系统联调与自检。",
+  "monthlyDone": "完成设备安装调试。",
+  "monthlyUndone": "培训未开展。",
+  "monthlyProblem": "培训计划与业务高峰冲突。",
+  "monthlyPlan": "开展人员培训并准备初验。",
+  "handoverPlace": "岳阳市财政局档案室",
+  "trialRunUserCount": 32,
+  "trialRunBusinessCount": 486,
+  "_documents": {
+    "二、过程分册/1、开工报审表.docx": {
+      "docNo": "YY123-KGBSB-01"
+    },
+    "二、过程分册/3、施工组织方案报审表.docx": {
+      "docNo": "YY123-SGZZFAB-01"
+    },
+    "二、过程分册/7、设备开箱验收记录.docx": {
+      "docNo": "YY123-SBKXYSJL-01"
+    },
+    "二、过程分册/8、设备安装调试记录表.docx": {
+      "docNo": "YY123-SBAZDSJLB-01"
+    },
+    "二、过程分册/10、施工日志.docx": {
+      "docNo": "YY123-SGRZ-001"
+    },
+    "二、过程分册/11、项目周报.docx": {
+      "docNo": "YY123-XMZB-001"
+    },
+    "二、过程分册/12、项目月报.docx": {
+      "docNo": "YY123-XMYB-001"
+    },
+    "五、初步验收分册（政务信息化项目）/1、试运行申请表.docx": {
+      "docNo": "YY123-SYXSQB-01"
+    },
+    "五、初步验收分册（政务信息化项目）/6、试运行记录表.docx": {
+      "docNo": "YY123-SYXJLB-001"
+    }
+  }
+}
