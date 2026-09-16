@@ -1,0 +1,155 @@
+{
+  "version": "2.3",
+  "updated": "2026-09-12",
+  "description": "验收资料编辑工具 · 项目字段字典。模板占位符 key 的唯一真源，程序按此字典渲染表单与填充文档。",
+  "scopes": {
+    "project": "项目级：录入一次，全项目所有文档复用",
+    "document": "文档级：每份文档各自不同",
+    "auto": "自动生成：由系统按规则计算"
+  },
+  "datePolicy": {
+    "enabled": false,
+    "rule": "所有日期一律不自动填充、不注入占位符。模板中的日期留白位置原样保留，由人工在编辑区手写。",
+    "reason": "工头 2026-09-12 定：开工日期不用填，所有日期都不用自动填。",
+    "effect": "程序不渲染日期表单；扫描时此类位置标记为「手填·日期」（@manualDate），不计入待填点，不参与填充引擎与残留校验。"
+  },
+  "tablePolicy": {
+    "enabled": true,
+    "mode": "program-side",
+    "rule": "8 张子表一律不在模板中标注 {{#rows:...}}，由程序端按表头列名自动识别静态表格并接管数据行。",
+    "reason": "工头 2026-09-12 定：子表程序端自动识别。",
+    "matchBy": "表头列名序列（见 tables[].columns），忽略前后全角空格与空列",
+    "effect": "模板保持静态表格；程序读到列名匹配的表格即按 columns 顺序填充数据行，行数不足则克隆、多余则删除。模板侧不得出现 {{#rows:}} / {{/rows}}。"
+  },
+  "disabledFields": [
+    { "key": "startDate", "label": "开工日期", "type": "date", "was": "四、时间地点 / project" },
+    { "key": "endDate", "label": "完工日期", "type": "date", "was": "四、时间地点 / project" },
+    { "key": "creationDate", "label": "创建时间", "type": "date", "was": "四、时间地点 / project" },
+    { "key": "docDate", "label": "文档日期", "type": "date", "was": "四、时间地点 / document" },
+    { "key": "signDate", "label": "签署/落款日期", "type": "date", "was": "四、时间地点 / document" },
+    { "key": "logDate", "label": "日志日期", "type": "date", "was": "六、过程分册专用 / document" },
+    { "key": "reviewTime", "label": "评审时间", "type": "date", "was": "七、验收分册专用 / document" },
+    { "key": "handoverTime", "label": "移交时间", "type": "date", "was": "七、验收分册专用 / document" },
+    { "key": "initialAcceptanceDate", "label": "初步验收通过日期", "type": "date", "was": "七、验收分册专用 / document" },
+    { "key": "acceptanceDate", "label": "验收日期", "type": "date", "was": "七、验收分册专用 / document" },
+    { "key": "trialRunStartDate", "label": "试运行开始日期", "type": "date", "was": "七、验收分册专用 / document" },
+    { "key": "dataGovernanceDate", "label": "数据治理完成日期", "type": "date", "was": "七、验收分册专用 / document" }
+  ],
+  "removedFields": {
+    "decidedBy": "工头 2026-09-12",
+    "reason": "模板中未落地（整份 37 个模板内均无 {{key}} 引用），且工头确认无需自动填充。一律从启用字段中移除，程序不渲染、不识别这些 key；此处仅作归档以便回溯。",
+    "fields": [
+      { "key": "projectIntro", "label": "项目情况简介", "was": "一、项目基本信息 / project", "type": "longtext", "reason": "七1「项目情况简介」正文实际用 projectGoal / projectContent" },
+      { "key": "ownerContact", "label": "建设单位联系人", "was": "二、参建单位 / project", "type": "text", "reason": "模板中建设单位联系人无落点" },
+      { "key": "ownerPhone", "label": "建设单位联系电话", "was": "二、参建单位 / project", "type": "text", "reason": "模板中建设单位联系电话无落点" },
+      { "key": "designUnit", "label": "设计单位", "was": "二、参建单位 / project", "type": "text", "reason": "模板中无设计单位栏" },
+      { "key": "legalPerson", "label": "法定代表人", "was": "三、人员 / project", "type": "text", "reason": "签章栏文字为提示语，手填盖章" },
+      { "key": "supervisor", "label": "监理工程师", "was": "三、人员 / project", "type": "text", "reason": "与 supervisorStaff 同义冗余，且模板中该位置手填" },
+      { "key": "expertName", "label": "评审专家姓名", "was": "三、人员 / document", "type": "text", "reason": "七9 该格留白，专家现场手填" },
+      { "key": "expertPhone", "label": "专家联系电话", "was": "三、人员 / document", "type": "text", "reason": "七9 该格留白，专家现场手填" },
+      { "key": "sealUnit", "label": "盖章单位", "was": "四、地点与盖章 / auto", "type": "text", "reason": "模板盖章位沿用原有文字，无占位符" },
+      { "key": "safetyCheck", "label": "质量安全检查", "was": "六、过程分册专用 / document", "type": "longtext", "reason": "二10 该栏为模板固定文案，无需字段（工头定：不动）" },
+      { "key": "otherNotes", "label": "其它情况说明", "was": "六、过程分册专用 / document", "type": "longtext", "reason": "工头 2026-09-12 定：「其它情况说明」不补占位符" },
+      { "key": "testLocation", "label": "调试地点", "was": "六、过程分册专用 / document", "type": "text", "reason": "二8「地　点」实际用 buildSite" },
+      { "key": "implementStaff", "label": "实施人员", "was": "六、过程分册专用 / document", "type": "text", "reason": "二8 该格留白，现场手填" },
+      { "key": "supervisorStaff", "label": "监理人员", "was": "六、过程分册专用 / document", "type": "text", "reason": "二8 该格留白，现场手填" },
+      { "key": "memoRecord", "label": "备忘记录", "was": "六、过程分册专用 / document", "type": "longtext", "reason": "二8 该栏留白，现场手填" },
+      { "key": "expertOpinion", "label": "专家意见", "was": "七、验收分册专用 / document", "type": "longtext", "reason": "七册意见栏为专家手写内容，不自动填" },
+      { "key": "expertReviewItems", "label": "专家评审意见条目", "was": "七、验收分册专用 / document", "type": "longtext", "reason": "七10「1.XXXX；」等为专家手写内容" },
+      { "key": "expertSuggestions", "label": "专家组建议/整改建议", "was": "七、验收分册专用 / document", "type": "longtext", "reason": "七10「建议/整改建议：」为专家手写内容" },
+      { "key": "expertLeader", "label": "专家组组长", "was": "七、验收分册专用 / document", "type": "text", "reason": "七10 该栏手签" },
+      { "key": "expertMembers", "label": "专家组成员", "was": "七、验收分册专用 / document", "type": "text", "reason": "七10 该栏手签" },
+      { "key": "receiveUnit", "label": "接收单位", "was": "七、验收分册专用 / document", "type": "text", "reason": "六9 接收单位改用 ownerUnit（建设单位）" },
+      { "key": "receiverName", "label": "接收人签名", "was": "七、验收分册专用 / document", "type": "text", "reason": "六9 该格手签" },
+      { "key": "rectificationCount", "label": "整改意见项数", "was": "七、验收分册专用 / document", "type": "number", "reason": "七7「验收组提出了　项整改意见」为手填数字" }
+    ]
+  },
+  "groups": [
+    {
+      "group": "一、项目基本信息",
+      "fields": [
+        { "key": "projectName", "label": "项目名称", "aliases": ["工程名称", "项目名称", "工程", "项目"], "type": "text", "scope": "project", "required": true, "default": "", "note": "替换模板中所有「×××工程」「XXX项目」" },
+        { "key": "contractNo", "label": "合同编号", "aliases": ["合同编号"], "type": "text", "scope": "project", "required": "conditional", "default": "", "note": "必填项之一（如有）。如 YY123；无合同时留空，文档编号降级为「表名缩写-流水号」" },
+        { "key": "contractAmount", "label": "合同金额（万元）", "aliases": ["合同金额", "合同金额（万元）"], "type": "number", "scope": "project", "required": false, "default": "" },
+        { "key": "approvalDocNo", "label": "方案审核批复（备案）文号", "aliases": ["方案审核文号", "方案审核批复（备案）文号", "方案审核（备案）编号"], "type": "text", "scope": "project", "required": false, "default": "" },
+        { "key": "projectBackground", "label": "项目背景", "aliases": ["项目背景", "建设背景"], "type": "longtext", "scope": "project", "required": false, "default": "", "note": "施工组织方案 1.2 节正文" },
+        { "key": "projectGoal", "label": "建设目标", "aliases": ["建设目标", "项目目标", "完成目标"], "type": "longtext", "scope": "project", "required": false, "default": "", "note": "施工组织方案 1.3 节、项目情况简介 二节正文" },
+        { "key": "projectContent", "label": "主要建设内容", "aliases": ["主要建设内容", "建设内容", "主要内容", "完成内容"], "type": "longtext", "scope": "project", "required": false, "default": "", "note": "施工组织方案 1.4 节、基础信息、意见审核表建设内容栏" }
+      ]
+    },
+    {
+      "group": "二、参建单位",
+      "fields": [
+        { "key": "ownerUnit", "label": "建设单位", "aliases": ["建设单位", "使用单位"], "type": "text", "scope": "project", "required": true, "default": "" },
+        { "key": "ownerCreditCode", "label": "建设单位统一社会信用代码", "aliases": ["社会统一信用代码"], "type": "text", "scope": "project", "required": false, "default": "" },
+
+        { "key": "constructionUnit", "label": "承建单位", "aliases": ["承建单位", "施工单位", "承包单位"], "type": "text", "scope": "project", "required": true, "default": "", "note": "施工方全称，通常由中标通知书/合同确定" },
+        { "key": "constructionCreditCode", "label": "承建单位统一社会信用代码", "aliases": ["社会统一信用代码"], "type": "text", "scope": "project", "required": false, "default": "" },
+        { "key": "constructionContact", "label": "承建单位联系人", "aliases": ["联系人"], "type": "text", "scope": "project", "required": false, "default": "" },
+        { "key": "constructionPhone", "label": "承建单位联系电话", "aliases": ["联系电话"], "type": "text", "scope": "project", "required": false, "default": "" },
+
+        { "key": "supervisionUnit", "label": "监理单位", "aliases": ["监理单位"], "type": "text", "scope": "project", "required": false, "default": "", "note": "无监理时留空，相关意见栏可整段隐藏" },
+        { "key": "supervisionCreditCode", "label": "监理单位统一社会信用代码", "aliases": ["社会统一信用代码"], "type": "text", "scope": "project", "required": false, "default": "" },
+        { "key": "supervisionContact", "label": "监理单位联系人", "aliases": ["联系人"], "type": "text", "scope": "project", "required": false, "default": "" },
+        { "key": "supervisionPhone", "label": "监理单位联系电话", "aliases": ["联系电话"], "type": "text", "scope": "project", "required": false, "default": "" }
+      ]
+    },
+    {
+      "group": "三、人员",
+      "fields": [
+        { "key": "projectManager", "label": "项目经理", "aliases": ["项目经理", "项目负责人"], "type": "text", "scope": "project", "required": false, "default": "" },
+        { "key": "managerIdCard", "label": "项目经理身份证号", "aliases": ["身份证号"], "type": "text", "scope": "project", "required": false, "default": "" },
+        { "key": "chiefSupervisor", "label": "项目总监", "aliases": ["项目总监", "总监理工程师"], "type": "text", "scope": "project", "required": false, "default": "" }
+      ]
+    },
+    {
+      "group": "四、地点",
+      "fields": [
+        { "key": "buildSite", "label": "建设/施工地点", "aliases": ["建设地点", "施工地点", "地    点", "地点", "验收地点", "评审地点"], "type": "text", "scope": "project", "required": false, "default": "" }
+      ]
+    },
+    {
+      "group": "五、编号",
+      "fields": [
+        { "key": "docNo", "label": "文档编号", "aliases": ["文档编号"], "type": "auto", "scope": "auto", "required": true, "default": "", "note": "规则见规范第七节：{合同编号}-{表名缩写}-{流水号}" }
+      ]
+    },
+    {
+      "group": "六、过程分册专用",
+      "fields": [
+        { "key": "weather", "label": "天气信息", "aliases": ["天气信息", "天气"], "type": "text", "scope": "document", "required": false, "default": "" },
+        { "key": "todayWork", "label": "今日完成工作", "aliases": ["今日完成工作"], "type": "longtext", "scope": "document", "required": false, "default": "" },
+        { "key": "workerCount", "label": "当天施工人数", "aliases": ["当天施工人数"], "type": "number", "scope": "document", "required": false, "default": "" },
+        { "key": "siteIssue", "label": "现场问题", "aliases": ["现场问题"], "type": "longtext", "scope": "document", "required": false, "default": "" },
+        { "key": "coordination", "label": "需协调事项", "aliases": ["需协调事项"], "type": "longtext", "scope": "document", "required": false, "default": "" },
+        { "key": "projectStage", "label": "项目阶段", "aliases": ["项目阶段"], "type": "text", "scope": "document", "required": false, "default": "" },
+        { "key": "weeklyDone", "label": "上周已完成工作", "aliases": ["上周已完成工作", "本周已完成工作"], "type": "longtext", "scope": "auto", "required": false, "default": "", "note": "由本周施工日志自动汇总" },
+        { "key": "weeklyUndone", "label": "上周未完成工作及原因", "aliases": ["上周未完成工作及原因"], "type": "longtext", "scope": "document", "required": false, "default": "" },
+        { "key": "weeklyProblem", "label": "上周工作存在的问题及分析", "aliases": ["上周工作存在的问题及分析"], "type": "longtext", "scope": "document", "required": false, "default": "" },
+        { "key": "weeklyPlan", "label": "本周工作计划", "aliases": ["本周工作计划"], "type": "longtext", "scope": "document", "required": false, "default": "" },
+        { "key": "monthlyDone", "label": "上月已完成工作", "aliases": ["上月已完成工作"], "type": "longtext", "scope": "auto", "required": false, "default": "", "note": "由本月项目周报自动汇总" },
+        { "key": "monthlyUndone", "label": "上月未完成工作及原因", "aliases": ["上月未完成工作及原因"], "type": "longtext", "scope": "document", "required": false, "default": "" },
+        { "key": "monthlyProblem", "label": "上月工作存在的问题及分析", "aliases": ["上月工作存在的问题及分析"], "type": "longtext", "scope": "document", "required": false, "default": "" },
+        { "key": "monthlyPlan", "label": "本月工作计划", "aliases": ["本月工作计划"], "type": "longtext", "scope": "document", "required": false, "default": "" }
+      ]
+    },
+    {
+      "group": "七、验收分册专用",
+      "fields": [
+        { "key": "handoverPlace", "label": "移交地点", "aliases": ["移交地点"], "type": "text", "scope": "document", "required": false, "default": "" },
+        { "key": "trialRunUserCount", "label": "试运行使用人数", "aliases": ["人员使用"], "type": "number", "scope": "document", "required": false, "default": "" },
+        { "key": "trialRunBusinessCount", "label": "试运行业务笔数", "aliases": ["笔业务"], "type": "number", "scope": "document", "required": false, "default": "" }
+      ]
+    }
+  ],
+  "tables": [
+    { "key": "deviceList", "label": "硬件设备配置清单", "columns": ["序号", "名称", "主要性能指标", "品牌及型号", "所属系统及部署位置", "单价（万元）", "数量", "总价（万元）", "说明"], "usedBy": ["七2 项目软硬件配置清单及移交清单（表1）"], "note": "列名取自模板实际表头；表头前 3 行为信息行；模板不标注，程序端按 columns 匹配表头自动接管数据行" },
+    { "key": "softwareList", "label": "软件配置清单", "columns": ["序号", "名称", "供应商", "功能参数概述", "所属系统及部署位置", "单价（万元）", "数量", "总价（万元）", "说明"], "usedBy": ["七2 项目软硬件配置清单及移交清单（表2）"], "note": "列名取自模板实际表头；表头前 3 行为信息行；模板不标注，程序端按 columns 匹配表头自动接管数据行" },
+    { "key": "testItemList", "label": "设备安装调试记录", "columns": ["设备名称", "主要部件信息记录", "安装位置", "安装工艺描述", "加电工作状况", "实施记录"], "usedBy": ["二8 设备安装调试记录表"], "note": "模板不标注，程序端按 columns 匹配表头自动接管数据行" },
+    { "key": "trialRunList", "label": "试运行记录", "columns": ["日期", "试运行内容", "试运行情况", "记录人", "备注"], "usedBy": ["五6 试运行记录"], "note": "模板不标注，程序端按 columns 匹配表头自动接管数据行" },
+    { "key": "expertScoreList", "label": "竣工验收评审评分表", "columns": ["评分项", "说明(100分制)", "得分"], "usedBy": ["七9 竣工验收评审意见表（个人）"], "note": "模板不标注，程序端按 columns 匹配表头自动接管数据行" },
+    { "key": "documentList", "label": "文档移交清单", "columns": ["序号", "文档名称", "文档说明", "单位", "数量"], "usedBy": ["六9 文档移交表"], "note": "模板不标注，程序端按 columns 匹配表头自动接管数据行" },
+    { "key": "documentChecklist", "label": "验收资料目录勾选表", "columns": ["资料名称", "是否提供", "页码", "备注"], "usedBy": ["八2 验收资料目录"], "note": "模板不标注，程序端按 columns 匹配表头自动接管数据行" },
+    { "key": "volumeList", "label": "卷册清单", "columns": ["卷号", "文档名称"], "usedBy": ["八1 验收资料封面"], "note": "模板不标注，程序端按 columns 匹配表头自动接管数据行；模板静态表仅列 5 卷，程序按 8 分册补齐" }
+  ]
+}

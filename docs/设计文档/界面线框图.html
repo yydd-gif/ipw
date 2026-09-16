@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>验收资料编辑软件 · 界面线框图</title>
+<style>
+  :root{
+    --bg:#eef0f4; --panel:#ffffff; --border:#d5dae2; --border-2:#c3cad4;
+    --text:#1e2431; --muted:#6b7280; --hint:#9aa1ac;
+    --accent:#2563eb; --accent-bg:#e8f0fe;
+    --red:#dc2626; --green:#16a34a; --amber:#d97706; --gray:#9ca3af;
+    --sans:"Microsoft YaHei","PingFang SC","Segoe UI",sans-serif;
+    --doc:"SimSun","Songti SC",serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;line-height:1.6;}
+  .wrap{max-width:1240px;margin:0 auto;padding:36px 24px 72px;}
+
+  h1{font-size:22px;font-weight:600;margin:0 0 6px;}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 4px;}
+  .meta{color:var(--hint);font-size:12px;margin:0 0 32px;}
+
+  h2{font-size:16px;font-weight:600;margin:44px 0 8px;padding-left:10px;border-left:3px solid var(--accent);}
+  h2 .tag{font-size:12px;font-weight:400;color:var(--hint);margin-left:8px;}
+  .note{color:var(--muted);font-size:12.5px;margin:0 0 14px;}
+
+  .board{background:var(--bg);border-radius:10px;padding:0;margin:0 0 8px;overflow:hidden;}
+  .board-label{font-size:12px;color:var(--hint);margin:0 0 8px;letter-spacing:.3px;}
+
+  .win{background:var(--panel);border:1px solid var(--border-2);border-radius:8px;overflow:hidden;font-size:12px;}
+  .row{display:flex;align-items:stretch;border-bottom:1px solid var(--border);}
+  .row:last-child{border-bottom:none;}
+
+  /* 标题栏 */
+  .titlebar{background:#f7f8fa;height:34px;display:flex;align-items:center;padding:0 10px;gap:8px;}
+  .appdot{width:14px;height:14px;border-radius:3px;background:var(--accent);}
+  .title-text{font-size:12px;color:var(--text);}
+  .dirty{color:var(--red);font-weight:600;}
+  .winbtns{margin-left:auto;color:var(--hint);letter-spacing:6px;font-size:11px;}
+
+  /* 菜单条 */
+  .menubar{height:28px;display:flex;align-items:center;gap:2px;padding:0 8px;background:var(--panel);}
+  .menu-item{padding:3px 10px;border-radius:4px;color:var(--text);}
+  .menu-item:hover{background:var(--accent-bg);}
+
+  /* Ribbon */
+  .ribbon{background:#fafbfc;padding:6px 8px;display:flex;gap:0;border-top:1px solid var(--border);}
+  .rg{display:flex;flex-direction:column;padding:0 10px;border-right:1px solid var(--border);}
+  .rg:last-child{border-right:none;}
+  .rg-items{display:flex;gap:14px;padding:4px 0 2px;}
+  .ri{display:flex;flex-direction:column;align-items:center;gap:4px;width:46px;color:var(--text);}
+  .ri-ico{width:22px;height:22px;border:1px solid var(--border-2);border-radius:4px;background:#fff;display:flex;align-items:center;justify-content:center;}
+  .ri-ico svg{width:13px;height:13px;stroke:var(--accent);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}
+  .ri-lb{font-size:11px;color:var(--muted);white-space:nowrap;}
+  .rg-name{font-size:10.5px;color:var(--hint);text-align:center;padding-top:2px;border-top:1px dotted var(--border);}
+  .ri.primary .ri-ico{background:var(--accent);border-color:var(--accent);}
+  .ri.primary .ri-ico svg{stroke:#fff;}
+  .ri.primary .ri-lb{color:var(--accent);font-weight:600;}
+
+  /* 主体 */
+  .body{display:flex;min-height:392px;}
+  .left{width:268px;border-right:1px solid var(--border);display:flex;flex-direction:column;background:#fcfcfd;}
+  .tabs{display:flex;border-bottom:1px solid var(--border);background:#f7f8fa;}
+  .tab{padding:7px 13px;font-size:12px;color:var(--muted);border-bottom:2px solid transparent;cursor:default;}
+  .tab.on{color:var(--accent);border-bottom-color:var(--accent);background:#fff;font-weight:600;}
+  .tab.off{opacity:.55;}
+  .tree{padding:8px 4px;overflow:hidden;}
+  .tn{display:flex;align-items:center;gap:5px;padding:3.5px 8px;border-radius:4px;white-space:nowrap;}
+  .tn:hover{background:#f0f3f7;}
+  .tn.on{background:var(--accent-bg);}
+  .lv1{font-weight:600;color:var(--text);}
+  .lv2{padding-left:22px;color:var(--text);}
+  .lv3{padding-left:40px;color:var(--muted);}
+  .caret{width:9px;color:var(--hint);font-size:9px;}
+  .dot{width:7px;height:7px;border-radius:50%;margin-left:auto;flex:none;}
+  .d-gray{background:var(--gray);} .d-green{background:var(--green);}
+  .d-blue{background:var(--accent);} .d-red{background:var(--red);}
+  .badge-n{font-size:10px;color:var(--hint);background:#eef0f4;border-radius:8px;padding:0 5px;}
+
+  /* 编辑区 */
+  .right{flex:1;display:flex;flex-direction:column;min-width:0;background:#f2f3f6;}
+  .editor-toolbar{height:30px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 8px;gap:2px;}
+  .etab{padding:3px 11px;font-size:11.5px;color:var(--muted);border-radius:4px;}
+  .etab.on{background:var(--accent-bg);color:var(--accent);font-weight:600;}
+  .tool-sp{margin-left:auto;display:flex;gap:6px;align-items:center;}
+  .mini-btn{border:1px solid var(--border-2);background:#fff;border-radius:4px;padding:2px 8px;font-size:11px;color:var(--muted);}
+
+  .canvas{flex:1;padding:14px 16px;display:flex;gap:12px;overflow:hidden;}
+  .page{background:#fff;border:1px solid var(--border);border-radius:3px;box-shadow:0 1px 3px rgba(0,0,0,.06);flex:1;padding:22px 30px;font-family:var(--doc);color:#111;min-width:0;}
+  .pg-h1{text-align:center;font-size:17px;font-weight:700;letter-spacing:2px;margin:0 0 4px;}
+  .pg-h2{text-align:center;font-size:12.5px;margin:0 0 16px;color:#333;font-weight:400;}
+  .pg-p{font-size:12.5px;line-height:2.1;text-indent:2em;margin:0 0 2px;}
+  .ph{background:#f0f1f3;color:#a8adb6;border-bottom:1px dashed #c9ced6;padding:0 3px;border-radius:2px;}
+  .ph-ok{color:#111;}
+  .ph-blue{background:#e8f0fe;color:#1d4ed8;border-bottom:1px dashed var(--accent);padding:0 3px;}
+  .ph-req{color:var(--red);border-bottom:1px dashed var(--red);background:#fdeeee;padding:0 3px;}
+  .pg-tbl{width:100%;border-collapse:collapse;margin-top:10px;font-family:var(--doc);font-size:11.5px;}
+  .pg-tbl td,.pg-tbl th{border:1px solid #333;padding:4px 6px;text-align:center;}
+  .pg-tbl th{background:#f6f7f9;font-weight:400;}
+  .idx{display:inline-flex;width:15px;height:15px;border-radius:50%;background:var(--accent);color:#fff;font-size:10px;font-family:var(--sans);align-items:center;justify-content:center;margin-left:4px;vertical-align:middle;font-weight:600;}
+
+  /* 字段面板 */
+  .fields{width:216px;flex:none;background:#fff;border:1px solid var(--border);border-radius:6px;display:flex;flex-direction:column;overflow:hidden;}
+  .fp-head{padding:7px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;font-size:11.5px;font-weight:600;background:#f7f8fa;}
+  .fp-head .collapse{margin-left:auto;color:var(--hint);font-size:10px;}
+  .fp-body{padding:6px 0;overflow:hidden;}
+  .fp-grp{font-size:10.5px;color:var(--hint);padding:5px 10px 2px;letter-spacing:.5px;}
+  .fp-item{display:flex;align-items:center;gap:6px;padding:3px 10px;font-size:11.5px;}
+  .fp-name{color:var(--muted);width:66px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .fp-val{flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .fp-val.empty{color:#c2c7cf;}
+  .src{font-size:9.5px;border-radius:3px;padding:0 4px;flex:none;color:#fff;}
+  .s-auto{background:var(--accent);} .s-manual{background:var(--amber);} .s-import{background:var(--green);} .s-none{background:#c2c7cf;}
+  .fp-foot{padding:8px 10px;border-top:1px solid var(--border);background:#fafbfc;}
+  .btn-full{width:100%;padding:5px;border-radius:5px;background:var(--accent);color:#fff;text-align:center;font-size:11.5px;font-weight:600;border:none;}
+
+  /* 状态栏 */
+  .statusbar{height:24px;background:#f7f8fa;border-top:1px solid var(--border);display:flex;align-items:center;padding:0 10px;gap:14px;font-size:11px;color:var(--muted);}
+  .sb-r{margin-left:auto;display:flex;gap:14px;}
+  .pulse{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;margin-right:5px;}
+
+  /* 浮层 */
+  .popover{position:absolute;background:#fff;border:1px solid var(--border-2);border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.12);padding:8px 10px;font-family:var(--sans);width:190px;}
+  .po-label{font-size:10.5px;color:var(--hint);margin-bottom:4px;}
+  .po-input{border:1px solid var(--accent);border-radius:4px;padding:4px 6px;font-size:12px;width:100%;color:var(--text);}
+  .po-btns{display:flex;gap:6px;margin-top:6px;}
+  .po-btn{flex:1;text-align:center;font-size:11px;padding:3px;border-radius:4px;border:1px solid var(--border-2);color:var(--muted);}
+  .po-btn.pri{background:var(--accent);color:#fff;border-color:var(--accent);}
+
+  /* 台账 */
+  .ledger{padding:16px 18px;background:#fff;}
+  .metric-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;}
+  .metric{background:#f5f6f9;border-radius:6px;padding:10px 12px;}
+  .metric .lab{font-size:11px;color:var(--muted);}
+  .metric .num{font-size:21px;font-weight:600;line-height:1.25;}
+  .bar{height:8px;border-radius:4px;background:#e8eaee;overflow:hidden;display:flex;margin:2px 0 14px;}
+  .bar i{display:block;height:100%;}
+  .lg-tbl{width:100%;border-collapse:collapse;font-size:11.5px;}
+  .lg-tbl th{background:#f7f8fa;color:var(--muted);font-weight:400;text-align:left;padding:6px 9px;border-bottom:1px solid var(--border);}
+  .lg-tbl td{padding:6px 9px;border-bottom:1px solid #eef0f4;}
+  .lg-tbl tr:hover td{background:#fafbfc;}
+  .chip{font-size:10.5px;padding:1px 7px;border-radius:9px;display:inline-block;}
+  .c-green{background:#e7f6ec;color:#15803d;} .c-red{background:#fdecec;color:#b91c1c;}
+  .c-blue{background:#e8f0fe;color:#1d4ed8;} .c-gray{background:#f0f1f3;color:#6b7280;}
+  .c-amber{background:#fdf3e3;color:#b45309;}
+
+  /* 对话框 */
+  .overlay{background:rgba(30,36,49,.28);padding:26px;display:flex;align-items:center;justify-content:center;}
+  .dialog{background:#fff;border-radius:8px;width:430px;overflow:hidden;}
+  .dlg-h{padding:12px 16px;font-size:13.5px;font-weight:600;border-bottom:1px solid var(--border);}
+  .dlg-b{padding:14px 16px;font-size:12.5px;color:var(--text);}
+  .opt{display:flex;align-items:center;gap:9px;padding:6px 0;}
+  .radio{width:13px;height:13px;border-radius:50%;border:1.5px solid var(--border-2);flex:none;}
+  .radio.on{border-color:var(--accent);background:radial-gradient(circle,var(--accent) 0 3.5px,#fff 4px);}
+  .chk{width:13px;height:13px;border-radius:3px;border:1.5px solid var(--border-2);flex:none;}
+  .chk.on{background:var(--accent);border-color:var(--accent);position:relative;}
+  .chk.on::after{content:"";position:absolute;left:3.5px;top:1px;width:4px;height:7px;border:solid #fff;border-width:0 1.6px 1.6px 0;transform:rotate(42deg);}
+  .dlg-f{padding:11px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:#fafbfc;}
+  .btn{padding:5px 16px;border-radius:5px;font-size:12px;border:1px solid var(--border-2);background:#fff;color:var(--text);}
+  .btn.pri{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .warnbox{background:#fdf6e8;border:1px solid #f0dcb4;border-radius:6px;padding:9px 11px;font-size:11.5px;color:#8a5a12;margin-top:10px;}
+
+  /* 作业面板 */
+  .jobs{background:#fff;padding:0;}
+  .job{display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid #eef0f4;font-size:12px;}
+  .job:last-child{border-bottom:none;}
+  .j-ico{width:16px;height:16px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;}
+  .j-ok{background:var(--green);} .j-run{background:var(--accent);} .j-wait{background:#c2c7cf;} .j-err{background:var(--red);}
+  .j-name{width:150px;flex:none;}
+  .j-detail{color:var(--muted);flex:1;}
+  .j-time{color:var(--hint);font-size:11px;flex:none;}
+
+  /* 图例 */
+  .legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px 24px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:16px 18px;margin-top:10px;}
+  .lg-row{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--muted);}
+  .sw{width:11px;height:11px;border-radius:50%;flex:none;}
+  .callout{background:#fff;border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:12.5px;color:var(--muted);margin:12px 0;}
+  .callout b{color:var(--text);}
+  table.spec{width:100%;border-collapse:collapse;font-size:12.5px;background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+  table.spec th{background:#f7f8fa;text-align:left;font-weight:600;padding:8px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:12px;}
+  table.spec td{padding:8px 12px;border-bottom:1px solid #eef0f4;vertical-align:top;}
+  table.spec tr:last-child td{border-bottom:none;}
+  kbd{background:#f0f1f3;border:1px solid var(--border-2);border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:11px;font-family:var(--sans);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>验收资料编辑软件 · 界面线框图</h1>
+  <p class="sub">主界面三区骨架 + 台账 + 编辑交互 + 打印导出 + 作业面板，共 6 块画板</p>
+  <p class="meta">编制：马仔B ｜ 2026-09-16 ｜ v2.0 ｜ 上位依据：《软件使用方式设计》§3 · 《软件设计方案-v2.0》§5.4 · <code>06_原始资料/参考图.png</code></p>
+
+  <div class="callout">
+    <b>本文件的作用：</b>把方案里"文字描述的界面"变成施工方可以直接照着摆控件的骨架图。这是<b>交互骨架</b>不是视觉稿——不代表最终配色与图标风格，只锁定<b>区块划分、控件位置、状态含义</b>。视觉稿在 P4 阶段单独出。
+  </div>
+
+  <h2>画板 1 · 主界面（三区骨架）<span class="tag">Ribbon + 三页签树 + 编辑区</span></h2>
+  <p class="note">顶部菜单条与 Ribbon 分三组（工程 / 文档 / 服务），左侧树三页签，右侧编辑区含可折叠字段面板，底部状态栏。</p>
+
+  <div class="board-label">［ 主窗口 ］</div>
+  <div class="win">
+    <div class="row titlebar">
+      <span class="appdot"></span>
+      <span class="title-text">验收资料编辑软件 — 岳阳市财政局信息中心机房改造工程 <span class="dirty">*</span></span>
+      <span class="winbtns">— □ ×</span>
+    </div>
+
+    <div class="row menubar">
+      <span class="menu-item">文件</span><span class="menu-item">编辑</span><span class="menu-item">视图</span>
+      <span class="menu-item">工程</span><span class="menu-item">工具</span><span class="menu-item">帮助</span>
+    </div>
+
+    <div class="row ribbon">
+      <div class="rg">
+        <div class="rg-items">
+          <div class="ri primary"><span class="ri-ico"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><span class="ri-lb">新建工程</span></div>
+          <div class="ri"><span class="ri-ico"><svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg></span><span class="ri-lb">打开</span></div>
+          <div class="ri"><span class="ri-ico"><svg viewBox="0 0 24 24"><path d="M12 3v10M8 9l4 4 4-4M4 19h16"/></svg></span><span class="ri-lb">工程导入</span></div>
+          <div class="ri"><span class="ri-ico"><svg viewBox="0 0 24 24"><path d="M5 3h11l3 3v15H5z"/><path d="M9 12h6M9 16h6"/></svg></span><span class="ri-lb">保存</span></div>
+          <div class="ri"><span class="ri-ico"><svg viewBox="0 0 24 24"><path d="M9 15l6-6M8 12l-3 3a3.5 3.5 0 005 5l3-3M16 12l3-3a3.5 3.5 0 00-5-5l-3 3"/></svg></span><span class="ri-lb">附件管理</span></div>
+          <div class="ri"><span class="ri-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/></svg></span><span class="ri-lb">工程信息</span></div>
+        </div>
+        <div class="rg-name">工程</div>
+      </div>
+      <div class="rg">
+        <div class="rg-items">
+          <div class="ri"><span class="ri-ico"><svg viewBox="0 0 24 24"><path d="M4 8h6v9H4zM14 8h6v9h-6zM6 5h12v3H6z"/></svg></span><span class="ri-lb">打印</span></div>
+          <div class="ri"><span class="ri-ico"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.6"/></svg></span><span class="ri-lb">打印预览</span></div>
+          <div class="ri"><span class="ri-ico"><svg viewBox="0 0 24 24"><path d="M12 4v12M8 12l4 4 4-4M12 4l-4 4M12 4l4 4"/></svg></span><span class="ri-lb">展开收起</span></div>
+          <div class="ri"><span class="ri-ico"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></span><span class="ri-lb">查找</span></div>
+          <div class="ri"><span class="ri-ico"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6"/></svg></span><span class="ri-lb">替换</span></div>
+        </div>
+        <div class="rg-name">文档</div>
+      </div>
+      <div class="rg">
+        <div class="rg-items">
+          <div class="ri"><span class="ri-ico"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg></span><span class="ri-lb">客服</span></div>
+          <div class="ri"><span class="ri-ico"><svg viewBox="0 0 24 24"><path d="M5 8h14l-1.5 10h-11zM9 8a3 3 0 016 0"/></svg></span><span class="ri-lb">商城</span></div>
+          <div class="ri"><span class="ri-ico"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H4zM9 20l3-4 3 4"/></svg></span><span class="ri-lb">课堂</span></div>
+          <div class="ri"><span class="ri-ico"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5zM10 9l6 3-6 3z"/></svg></span><span class="ri-lb">视频</span></div>
+          <div class="ri"><span class="ri-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-4 3-6 7-6s7 2 7 6"/></svg></span><span class="ri-lb">我的</span></div>
+          <div class="ri"><span class="ri-ico"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span><span class="ri-lb">升级</span></div>
+          <div class="ri"><span class="ri-ico"><svg viewBox="0 0 24 24"><path d="M15 5H7v14h8M11 12h10M18 9l3 3-3 3"/></svg></span><span class="ri-lb">退出</span></div>
+        </div>
+        <div class="rg-name">服务</div>
+      </div>
+    </div>
+
+    <div class="row body">
+      <div class="left">
+        <div class="tabs">
+          <div class="tab on">表格目录</div>
+          <div class="tab off">回收站</div>
+          <div class="tab off">查找结果</div>
+        </div>
+        <div class="tree">
+          <div class="tn lv1"><span class="caret">▼</span>第一分册 · 工程准备阶段<span class="badge-n">12</span></div>
+          <div class="tn lv2 on"><span class="caret">·</span>01 中标通知书<span class="dot d-green"></span></div>
+          <div class="tn lv2"><span class="caret">·</span>02 施工合同<span class="dot d-green"></span></div>
+          <div class="tn lv2"><span class="caret">·</span>03 开工报告<span class="dot d-red"></span></div>
+          <div class="tn lv1"><span class="caret">▼</span>第二分册 · 施工管理资料<span class="badge-n">13</span></div>
+          <div class="tn lv2"><span class="caret">·</span>04 施工组织设计<span class="dot d-blue"></span></div>
+          <div class="tn lv2"><span class="caret">·</span>05 技术交底记录<span class="dot d-green"></span></div>
+          <div class="tn lv2"><span class="caret">·</span>06 设备开箱检验<span class="dot d-gray"></span></div>
+          <div class="tn lv1"><span class="caret">▶</span>第三分册 · 施工过程记录<span class="badge-n">9</span></div>
+          <div class="tn lv1"><span class="caret">▶</span>第四分册 · 图纸资料<span class="badge-n">4</span></div>
+        </div>
+      </div>
+
+      <div class="right">
+        <div class="editor-toolbar">
+          <span class="etab on">开始</span><span class="etab">插入</span><span class="etab">表格</span><span class="etab">视图</span><span class="etab">AI</span>
+          <span class="tool-sp"><span class="mini-btn">显示/隐藏标记</span><span class="mini-btn">100%</span><span class="mini-btn">面板 ◀</span></span>
+        </div>
+        <div class="canvas">
+          <div class="page">
+            <p class="pg-h1">工程开工报告</p>
+            <p class="pg-h2">岳阳市财政局信息中心机房改造工程</p>
+            <p class="pg-p">工程名称：<span class="ph ph-ok">岳阳市财政局信息中心机房改造工程</span><span class="idx">1</span></p>
+            <p class="pg-p">建设单位：<span class="ph ph-ok">岳阳市财政局</span></p>
+            <p class="pg-p">施工单位：<span class="ph ph-blue">湖南省俊昇伟业信息科技有限公司</span><span class="idx">2</span></p>
+            <p class="pg-p">合同编号：<span class="ph ph-ok">YYCZ-2026-0816</span></p>
+            <p class="pg-p">开工日期：<span class="ph ph-req">{{startDate}}</span><span class="idx">3</span></p>
+            <table class="pg-tbl">
+              <tr><th>序号</th><th>分项工程名称</th><th>工程量</th><th>负责人</th></tr>
+              <tr><td>1</td><td>机房基础装修</td><td class="ph">　{{qty}}　</td><td class="ph">　{{leader}}　</td></tr>
+              <tr><td>2</td><td>供配电系统</td><td class="ph">　{{qty}}　</td><td class="ph">　{{leader}}　</td></tr>
+            </table>
+            <p class="pg-p" style="margin-top:12px;font-size:11.5px;color:#888;font-family:var(--sans);text-indent:0;">
+              ① 已填（正常正文）　② 推导值（蓝虚线底，来源可溯）　③ 必填缺失（红波浪线，不自动填日期）
+            </p>
+          </div>
+
+          <div class="fields">
+            <div class="fp-head">字段面板（39）<span class="collapse">◀ 折叠</span></div>
+            <div class="fp-body">
+              <div class="fp-grp">工程信息 · 7</div>
+              <div class="fp-item"><span class="fp-name">工程名称</span><span class="fp-val">岳阳市财政局…</span><span class="src s-manual">手</span></div>
+              <div class="fp-item"><span class="fp-name">建设单位</span><span class="fp-val">岳阳市财政局</span><span class="src s-manual">手</span></div>
+              <div class="fp-item"><span class="fp-name">施工单位</span><span class="fp-val">俊昇伟业</span><span class="src s-import">导</span></div>
+              <div class="fp-item"><span class="fp-name">合同编号</span><span class="fp-val">YYCZ-2026-0816</span><span class="src s-import">导</span></div>
+              <div class="fp-item"><span class="fp-name">监理单位</span><span class="fp-val">湖南大福</span><span class="src s-auto">推</span></div>
+              <div class="fp-grp">文档信息 · 15</div>
+              <div class="fp-item"><span class="fp-name">开工日期</span><span class="fp-val empty">未填 · 日期不自动填</span><span class="src s-none">—</span></div>
+              <div class="fp-item"><span class="fp-name">文档编号</span><span class="fp-val">YYCZ-2026-0816-KG-01</span><span class="src s-auto">推</span></div>
+              <div class="fp-item"><span class="fp-name">编制人</span><span class="fp-val">郭工</span><span class="src s-manual">手</span></div>
+            </div>
+            <div class="fp-foot"><div class="btn-full">同步全册</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row statusbar">
+      <span><span class="pulse"></span>引擎就绪</span>
+      <span>第 3 / 12 页</span>
+      <span>本册完成度 62%</span>
+      <span class="sb-r"><span>未保存更改 2 处</span><span>模板资产 v1.0（37 份）</span><span>只读保护：开</span></span>
+    </div>
+  </div>
+
+  <h2>画板 2 · 编辑区交互细节<span class="tag">占位符四态 + 就地填写浮层</span></h2>
+  <p class="note">点浅灰占位符 → 就地浮出小输入框，<b>不跳到右侧字段面板</b>（减少视线移动）。<kbd>Tab</kbd> 跳到下一个待填点。</p>
+
+  <div class="board" style="position:relative;">
+    <div style="background:#fff;border:1px solid var(--border);border-radius:3px;padding:18px 26px;font-family:var(--doc);position:relative;max-width:600px;">
+      <p class="pg-p" style="text-indent:0;">监理单位：
+        <span class="ph" style="position:relative;">{{supervisionUnit}}</span>
+      </p>
+      <div class="popover" style="left:150px;top:26px;">
+        <div class="po-label">监理单位　<span style="color:#9aa1ac;">字典 · 建议值</span></div>
+        <div class="po-input">湖南大福工程管理有限公司</div>
+        <div class="po-btns"><span class="po-btn pri">确定</span><span class="po-btn">取消</span></div>
+      </div>
+    </div>
+  </div>
+
+  <table class="spec" style="margin-top:14px;">
+    <tr><th style="width:170px;">占位符状态</th><th style="width:150px;">视觉表现</th><th>含义与数据来源</th></tr>
+    <tr><td>未填</td><td><span class="ph">{{key}}</span></td><td>浅灰底 + 虚线底边。S5/S6 级来源缺值，等待人工</td></tr>
+    <tr><td>已填</td><td><span style="font-family:var(--doc);">岳阳市财政局</span></td><td>正常正文。来源已裁决，可覆盖</td></tr>
+    <tr><td>推导值</td><td><span class="ph-blue">湖南省俊昇伟业…</span></td><td>蓝色虚线底。由其他字段推导（自动填数），带 <code>provenance</code> 可溯源</td></tr>
+    <tr><td>必填缺失</td><td><span class="ph-req">{{startDate}}</span></td><td>红色波浪线 + 阻止导出。12 个日期字段恒为此态（不自动填）</td></tr>
+  </table>
+
+  <h2>画板 3 · 台账视图<span class="tag">一眼看出还差哪几项</span></h2>
+  <p class="note">对标筑业云「智能台账 + 查漏补缺」。三种口径可切换：按分册 / 按状态 / 按重要级别。点任一行直接跳到那份文档。</p>
+
+  <div class="board">
+    <div class="win">
+      <div class="ledger">
+        <div class="metric-row">
+          <div class="metric"><div class="lab">目录项总数</div><div class="num">55</div></div>
+          <div class="metric"><div class="lab">有模板项</div><div class="num">37</div></div>
+          <div class="metric"><div class="lab">已完成</div><div class="num" style="color:var(--green);">23</div></div>
+          <div class="metric"><div class="lab">必填缺失</div><div class="num" style="color:var(--red);">6</div></div>
+        </div>
+        <div class="bar">
+          <i style="width:42%;background:var(--green);"></i>
+          <i style="width:11%;background:var(--accent);"></i>
+          <i style="width:11%;background:var(--red);"></i>
+          <i style="width:36%;background:#e0e3e8;"></i>
+        </div>
+        <table class="lg-tbl">
+          <tr><th style="width:70px;">序号</th><th>目录项名称</th><th style="width:96px;">分册</th><th style="width:88px;">状态</th><th style="width:120px;">缺什么</th><th style="width:70px;">操作</th></tr>
+          <tr><td>03</td><td>开工报告</td><td>第一分册</td><td><span class="chip c-red">必填缺失</span></td><td>开工日期</td><td style="color:var(--accent);">打开 →</td></tr>
+          <tr><td>04</td><td>施工组织设计</td><td>第二分册</td><td><span class="chip c-blue">部分填充</span></td><td>2 个可选字段</td><td style="color:var(--accent);">打开 →</td></tr>
+          <tr><td>06</td><td>设备开箱检验记录</td><td>第二分册</td><td><span class="chip c-gray">未开始</span></td><td>—</td><td style="color:var(--accent);">成册 →</td></tr>
+          <tr><td>09</td><td>隐蔽工程验收记录</td><td>第三分册</td><td><span class="chip c-amber">待上传附件</span></td><td>照片 3 张</td><td style="color:var(--accent);">上传 →</td></tr>
+          <tr><td>21</td><td>系统试运行记录</td><td>第五分册</td><td><span class="chip c-green">已完成</span></td><td>—</td><td style="color:var(--accent);">查看 →</td></tr>
+        </table>
+        <p style="font-size:11.5px;color:var(--hint);margin:12px 0 0;">
+          完成度分母 = 必须项（37 有模板项 + 重要上传项）；分子 = 已填完整且必填无缺的文档。无模板的 18 项按「重要上传项」单独计。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <h2>画板 4 · 一键成册作业面板<span class="tag">七引擎流水线可见</span></h2>
+  <p class="note">「一键成册」不是黑盒。作业面板把 S0–S6 取数 → 七层决议 → 填充 → 子表 → 编号 → 汇总 → 校验全程列出来，失败的项能定位到具体字段。</p>
+
+  <div class="board">
+    <div class="win">
+      <div class="jobs">
+        <div class="job" style="background:#f7f8fa;font-weight:600;">
+          <span class="j-ico j-run">▶</span><span class="j-name">一键成册 · 运行中</span>
+          <span class="j-detail">正在处理 25 / 37 份模板</span><span class="j-time">00:00:14</span>
+        </div>
+        <div class="job"><span class="j-ico j-ok">✓</span><span class="j-name">datafill 取值装配</span><span class="j-detail">39 字段裁决完成 · 命中 32 · 缺值 7（保留占位符）</span><span class="j-time">2.4s</span></div>
+        <div class="job"><span class="j-ico j-ok">✓</span><span class="j-name">numbering 编号分配</span><span class="j-detail">9 项启用文档编号，按目录项内不重排规则</span><span class="j-time">0.3s</span></div>
+        <div class="job"><span class="j-ico j-run">▶</span><span class="j-name">fill 填充</span><span class="j-detail">部件级写回 · 25/37 完成 · 媒体部件零改动</span><span class="j-time">00:00:11</span></div>
+        <div class="job"><span class="j-ico j-wait">·</span><span class="j-name">subtable 子表</span><span class="j-detail">8 张子表按表头列名识别（程序侧）</span><span class="j-time">等待</span></div>
+        <div class="job"><span class="j-ico j-wait">·</span><span class="j-name">aggregate 汇总</span><span class="j-detail">生成整册目录与页码</span><span class="j-time">等待</span></div>
+        <div class="job"><span class="j-ico j-wait">·</span><span class="j-name">verify 校验</span><span class="j-detail">锚点完整性 / 必填 / 编号唯一性</span><span class="j-time">等待</span></div>
+        <div class="job" style="background:#fdf6e8;"><span class="j-ico j-err">!</span><span class="j-name">模板保护检查</span><span class="j-detail">assets/templates 全程只读 · 已校验通过</span><span class="j-time">0.1s</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h2>画板 5 · 打印与导出<span class="tag">打完印标记状态</span></h2>
+  <p class="note">打印后自动写 <code>_printStates</code>；导出走整册 PDF（<code>pypdf</code> 合并），必填缺失时阻止导出并给出清单。</p>
+
+  <div class="board overlay" style="min-height:280px;">
+    <div class="dialog">
+      <div class="dlg-h">导出整册 PDF</div>
+      <div class="dlg-b">
+        <div class="opt"><span class="radio on"></span>按目录顺序合并（55 项 → 37 份文档）</div>
+        <div class="opt"><span class="radio"></span>按分册分别导出（8 个 PDF）</div>
+        <div class="opt" style="padding-top:10px;"><span class="chk on"></span>生成整册目录页并写入页码</div>
+        <div class="opt"><span class="chk on"></span>导出后标记已打印状态</div>
+        <div class="opt"><span class="chk"></span>同时导出 Excel 台账（完成度清单）</div>
+        <div class="warnbox">
+          <b>注意：</b>当前有 6 项必填缺失（含 5 个日期字段），导出将中断。请先在台账中补齐，或勾选"忽略必填裸导出"（不推荐）。
+        </div>
+      </div>
+      <div class="dlg-f"><span class="btn">取消</span><span class="btn pri">开始导出</span></div>
+    </div>
+  </div>
+
+  <h2>图例与硬性约束</h2>
+  <div class="legend">
+    <div class="lg-row"><span class="sw d-gray"></span>未开始（灰）</div>
+    <div class="lg-row"><span class="sw d-green"></span>已完成（绿）</div>
+    <div class="lg-row"><span class="sw d-blue"></span>部分填充（蓝）</div>
+    <div class="lg-row"><span class="sw d-red"></span>必填缺失（红）</div>
+    <div class="lg-row"><span class="src s-auto" style="padding:1px 6px;">推</span>引擎推导值</div>
+    <div class="lg-row"><span class="src s-manual" style="padding:1px 6px;">手</span>人工录入</div>
+    <div class="lg-row"><span class="src s-import" style="padding:1px 6px;">导</span>工程导入</div>
+    <div class="lg-row"><span class="src s-none" style="padding:1px 6px;">—</span>无来源（待人工）</div>
+  </div>
+
+  <table class="spec" style="margin-top:16px;">
+    <tr><th style="width:190px;">约束</th><th>说明</th></tr>
+    <tr><td>三区骨架不可改</td><td>顶部 Ribbon + 左侧三页签树 + 右侧编辑区。这是对标参考图定死的形态，P4 阶段只做视觉，不动分区。</td></tr>
+    <tr><td>字段面板可折叠</td><td>默认展开；窄屏或纯阅读时折叠，编辑区占满。</td></tr>
+    <tr><td>编号只读</td><td><code>docNo</code> 以只读样式渲染，双击才允许手动覆盖（二次确认），且覆盖后该文档退出自动编号。</td></tr>
+    <tr><td>日期不自动填</td><td>12 个日期字段在界面上恒为「待人工」态，引擎加载期就会拒绝相关填数规则。</td></tr>
+    <tr><td>缺值不美化</td><td>缺值不显示为空、不显示"—"，界面与文档里都保留 <code>{{key}}</code>；导出时阻断而非产出半成品。</td></tr>
+    <tr><td>AI 结果需确认</td><td>选中文字 → 右键 AI 改写，结果以「原文 / 新文」对比视图呈现，确认才替换，不直接落笔。</td></tr>
+    <tr><td>不做替代 Word 的承诺</td><td>正确表述：验收资料的自动生成与管理系统，内建够用的文档编辑能力。建议写进"关于"页。</td></tr>
+  </table>
+
+</div>
+</body>
+</html>

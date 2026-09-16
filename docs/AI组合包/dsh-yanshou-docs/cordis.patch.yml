@@ -1,0 +1,34 @@
+# dsh-yanshou-docs 「组合包」配置层
+#
+# 本文件是一个 patch 条目数组。profile 的 dsh.profile.bundles 列出本包后，
+# dsh 会把这一层叠加到基础配置之上。
+#
+# 层顺序（后层按行胜出，且 patch 替换目标行整个 config，不深合并）：
+#   1. dsh.profile.bundles 所列各组合包的 patch，按列表顺序（先是 dsh-base）
+#   2. profile 自己的 cordis.patch.yml
+#   3. $DSH_HOME/cordis.patch.yml（机器本地偏好）
+#   4. 每个 --patch <path> overlay，按 argv 顺序
+#
+# 用法：
+#   dsh plugin --profile yanshou add ./dsh-yanshou-docs-0.1.0.tgz
+#   dsh --profile yanshou --dump-config     # 应看到 "# == dsh-yanshou-docs" 层
+#   dsh --profile yanshou
+
+- insert:
+    - id: yanshou-docs
+      name: dsh-yanshou-docs
+      # 下列取值只是「本机默认」。用户可在自己 profile 的 cordis.patch.yml 里
+      # 按 id: yanshou-docs 覆盖，无需改动本包。
+      config:
+        # Python 解释器（引擎层用 Python 写，插件层只做接线）
+        pythonBin: 'C:/Users/jbbab/.workbuddy/binaries/python/envs/default/Scripts/python.exe'
+        # 引擎脚本目录（绝对路径，空则由 workspaceRoot 推导）
+        engineRoot: 'F:/验收资料编辑软件/.workbuddy/engine'
+        # 工程根目录（存放 project.json 与各分册）
+        workspaceRoot: 'F:/验收资料编辑软件'
+        # 模板保护：这些目录及其子路径一律拒绝写入
+        protectedPaths:
+          - '模版'
+          - '模版_原始备份'
+        # 双保险开关，默认 false。置 true 仅用于你明确要改模板时临时放开
+        allowWriteToTemplates: false

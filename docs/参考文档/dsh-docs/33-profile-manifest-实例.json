@@ -1,0 +1,16 @@
+{
+  "name": "dsh-profile-probe2",
+  "private": true,
+  "dependencies": {
+    "dsh-probe-plugin": "file:C:/Users/jbbab/.workbuddy/binaries/node/workspace/_dshrun/hello-plugin/dsh-probe-plugin-0.1.0.tgz"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "dsh-probe-plugin"
+      ],
+      "patchReload": "live"
+    }
+  }
+}
