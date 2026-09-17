@@ -1,8 +1,14 @@
 # -*- coding: utf-8 -*-
-"""Required vs optional catalog rows.
+"""Catalog inclusion (required vs optional) and importance metadata.
 
-Source of truth: `软件目录.docx` parenthetical 重要项 / 普通项 / 一般项.
-重要项 → required (一键成册会建表). 普通项 / 一般项 → optional (empty until 新建表格).
+Source of truth for booklet generation: dictionary column ``收录`` → field
+``inclusion`` (``required`` / ``optional``). Do **not** derive required from
+软件目录.docx 重要项 / 普通项 / 一般项 — that file has no 必须 field.
+
+First-version roster (until ``收录`` is fully populated):
+  - every **upload** item → optional
+  - catalog ids **二-01～二-05** → optional
+  - every other **templated** item → required
 """
 from __future__ import annotations
 
@@ -21,6 +27,16 @@ ITEM_RE = re.compile(
     r'^(\d+)\s*[.．、]?\s*(.+?)\s*（([^）]*)）\s*；?\s*$'
 )
 IMPORTANCE_TOKENS = ('重要项', '普通项', '一般项')
+INCLUSION_REQUIRED = 'required'
+INCLUSION_OPTIONAL = 'optional'
+OPTIONAL_TEMPLATED_IDS = frozenset('二-%02d' % n for n in range(1, 6))
+_REQUIRED_TOKENS = frozenset({
+    'required', '必选', '必须', '必填', '收录',
+})
+_OPTIONAL_TOKENS = frozenset({
+    'optional', '可选', '非必须', '不收录',
+})
+UPLOAD_STATUS = frozenset({'上传项', '上传', 'upload'})
 
 
 def catalog_docx_path(abbr_path: Path | None = None,
@@ -63,28 +79,67 @@ def _importance_from_meta(meta: str) -> str:
     return '普通项'
 
 
-def is_required_importance(importance: str) -> bool:
-    return (importance or '').strip() == '重要项'
+def parse_inclusion(raw: str) -> str:
+    """Return required/optional from a 收录 cell, or '' if blank/unknown."""
+    s = (raw or '').strip()
+    if not s:
+        return ''
+    key = s.lower()
+    if s in _REQUIRED_TOKENS or key in _REQUIRED_TOKENS:
+        return INCLUSION_REQUIRED
+    if s in _OPTIONAL_TOKENS or key in _OPTIONAL_TOKENS:
+        return INCLUSION_OPTIONAL
+    return ''
+
+
+def is_upload_status(status: str) -> bool:
+    return (status or '').strip() in UPLOAD_STATUS
+
+
+def default_inclusion(*, item_id: str, is_upload: bool) -> str:
+    """First-version roster used when 收录 is empty."""
+    if is_upload or (item_id or '') in OPTIONAL_TEMPLATED_IDS:
+        return INCLUSION_OPTIONAL
+    return INCLUSION_REQUIRED
+
+
+def resolve_inclusion(*, item_id: str, csv_value: str = '',
+                      is_upload: bool = False) -> str:
+    parsed = parse_inclusion(csv_value)
+    if parsed:
+        return parsed
+    return default_inclusion(item_id=item_id, is_upload=is_upload)
+
+
+def item_inclusion(item) -> str:
+    """CatalogItem or snapshot dict → required/optional."""
+    if item is None:
+        return INCLUSION_OPTIONAL
+    if isinstance(item, dict):
+        parsed = parse_inclusion(str(item.get('inclusion') or ''))
+        if parsed:
+            return parsed
+        if 'required' in item and item.get('required') is not None:
+            return INCLUSION_REQUIRED if item.get('required') else INCLUSION_OPTIONAL
+        return INCLUSION_OPTIONAL
+    parsed = parse_inclusion(str(getattr(item, 'inclusion', '') or ''))
+    if parsed:
+        return parsed
+    if getattr(item, 'required', None) is not None:
+        return INCLUSION_REQUIRED if item.required else INCLUSION_OPTIONAL
+    return INCLUSION_OPTIONAL
 
 
 def item_required(item) -> bool:
-    """CatalogItem or snapshot dict. Missing flag → not required (do not mass-create)."""
-    if item is None:
-        return False
-    if isinstance(item, dict):
-        if 'required' in item and item.get('required') is not None:
-            return bool(item.get('required'))
-        return is_required_importance(item.get('importance') or '')
-    if getattr(item, 'required', None) is not None:
-        return bool(item.required)
-    return is_required_importance(getattr(item, 'importance', '') or '')
+    """True only when inclusion is required. Missing flag → optional (do not mass-create)."""
+    return item_inclusion(item) == INCLUSION_REQUIRED
 
 
 def parse_software_catalog(path: Path,
                            volume_alias: Dict[str, str] | None = None,
                            volume_seq: Dict[str, int] | None = None,
                            ) -> Dict[Tuple[int, int], str]:
-    """Return {(volumeSeq, seq): importance} from 软件目录.docx."""
+    """Return {(volumeSeq, seq): importance} from 软件目录.docx (metadata only)."""
     alias = volume_alias or {}
     vseq_map = volume_seq or {}
     flags: Dict[Tuple[int, int], str] = {}
@@ -121,10 +176,8 @@ def _guess_vol_seq(name: str) -> int:
 
 
 def apply_importance(items: Iterable, flags: Dict[Tuple[int, int], str]) -> None:
-    """Mutate CatalogItem.importance / .required in place."""
+    """Mutate CatalogItem.importance only. Never stamps required/inclusion."""
     for it in items:
         key = (int(getattr(it, 'volume_seq', 0) or 0),
                int(getattr(it, 'seq', 0) or 0))
-        importance = flags.get(key) or '普通项'
-        it.importance = importance
-        it.required = is_required_importance(importance)
+        it.importance = flags.get(key) or getattr(it, 'importance', None) or '普通项'

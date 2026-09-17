@@ -102,8 +102,11 @@ def _trash_ids(project: dict) -> set:
 def _item_state(item: dict, docs: list, print_states: dict, required_missing: bool) -> dict:
     mine = [d for d in docs if d.get('itemId') == item.get('itemId')]
     printed = any((print_states.get(d['docId']) or {}).get('printed') for d in mine)
+    req = item_required(item)
     if not mine:
         fill = 'empty'
+        # optional-not-created = gray (not missing); required-not-created = red
+        dot = 'red' if req else 'gray'
     else:
         states = [d.get('fillState') or 'empty' for d in mine]
         if 'error' in states:
@@ -117,9 +120,10 @@ def _item_state(item: dict, docs: list, print_states: dict, required_missing: bo
         # leftover required project fields after generate → red
         if required_missing and fill in ('draft', 'complete'):
             fill = 'error'
+        dot = DOT[fill]
     return {
         'fillState': fill,
-        'dot': DOT[fill],
+        'dot': dot,
         'printed': bool(printed),
         'docs': mine,
     }
@@ -175,7 +179,8 @@ def _ledger(catalog_items: list, docs: list, print_states: dict, required_missin
             'volume': it.get('volume'),
             'hasTemplate': it.get('hasTemplate'),
             'required': req,
-            'importance': it.get('importance') or ('重要项' if req else '普通项'),
+            'inclusion': it.get('inclusion') or ('required' if req else 'optional'),
+            'importance': it.get('importance') or '普通项',
             'fillState': fill,
             'dot': st['dot'],
             'printed': st['printed'],
@@ -229,7 +234,8 @@ def _open_payload(project_path: Path) -> dict:
         rec = dict(it)
         rec.update(st)
         rec['required'] = item_required(it)
-        rec['importance'] = it.get('importance') or ('重要项' if rec['required'] else '普通项')
+        rec['inclusion'] = it.get('inclusion') or ('required' if rec['required'] else 'optional')
+        rec['importance'] = it.get('importance') or '普通项'
         items.append(rec)
         vol = it.get('volume') or ''
         if vol not in vol_map:

@@ -122,13 +122,29 @@ def main() -> int:
     check(by_id.get('二-05', {}).get('required') is False,
           '工程开工令 optional in snapshot',
           str((by_id.get('二-05') or {}).get('required')), failures)
+    check(by_id.get('二-01', {}).get('required') is False,
+          '开工报审表 二-01 optional',
+          str((by_id.get('二-01') or {}).get('required')), failures)
+    check(by_id.get('一-01', {}).get('required') is False,
+          'upload 中标通知书 optional',
+          str((by_id.get('一-01') or {}).get('required')), failures)
     check(by_id.get('六-01', {}).get('required') is True,
           '验收报告封面 required in snapshot',
           str((by_id.get('六-01') or {}).get('required')), failures)
+    check(by_id.get('八-03', {}).get('required') is True,
+          '验收资料隔页 required (收录, not 一般项)',
+          str((by_id.get('八-03') or {}).get('required')), failures)
     check((by_id.get('二-05') or {}).get('dot') == 'gray'
           and not (by_id.get('二-05') or {}).get('docs'),
-          'optional empty row has no instance',
+          'optional empty row is gray, no instance',
           str(by_id.get('二-05')), failures)
+    check((by_id.get('六-01') or {}).get('dot') == 'red'
+          and not (by_id.get('六-01') or {}).get('docs'),
+          'required empty row is red, no instance',
+          str(by_id.get('六-01')), failures)
+    check('red' in dots and 'gray' in dots,
+          'fresh project has red (required empty) and gray (optional empty)',
+          str(dots), failures)
 
     # save a field
     proc = run([

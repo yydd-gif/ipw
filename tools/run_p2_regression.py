@@ -26,7 +26,9 @@ sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(ENGINE))
 
 from lib.catalog_build import find_template, item_folder, numbered_filename  # noqa: E402
-from lib.catalog_flags import item_required  # noqa: E402
+from lib.catalog_flags import (  # noqa: E402
+    OPTIONAL_TEMPLATED_IDS, item_required, resolve_inclusion,
+)
 from lib.numbering import (  # noqa: E402
     allocate_one, apply_action, empty_pool, ensure_pool, make_prefix,
     release_one, restore_one,
@@ -46,6 +48,8 @@ ALIAS = SPEC / '分册别名表.csv'
 EXPECT_CATALOG = 56
 EXPECT_TPL = 37
 EXPECT_UPLOAD = 19
+EXPECT_REQUIRED = 32  # templated minus 二-01～二-05
+EXPECT_OPTIONAL = 24  # 19 uploads + 5 process optionals
 WNS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 
 
@@ -222,23 +226,52 @@ def main() -> int:
           '%d (expect %d)' % (n_up, EXPECT_UPLOAD), failures)
     n_req = sum(1 for it in catalog.items if item_required(it))
     n_opt = len(catalog.items) - n_req
-    check(n_req > 0 and n_opt > 0 and n_req + n_opt == EXPECT_CATALOG,
-          'required vs optional split',
+    check(n_req == EXPECT_REQUIRED and n_opt == EXPECT_OPTIONAL,
+          'required vs optional split (收录 roster)',
           'required=%d optional=%d' % (n_req, n_opt), failures)
     kgl = catalog.by_id.get('二-05')
     cover = catalog.by_id.get('六-01')
     divider = catalog.by_id.get('八-03')
+    bid = catalog.by_id.get('一-01')
+    kgb = catalog.by_id.get('二-01')
+    sgrz = catalog.by_id.get('二-10')
     check(kgl is not None and item_required(kgl) is False
-          and (kgl.importance or '') in ('普通项', '一般项'),
-          '工程开工令 is optional (软件目录 普通项)',
-          '%s required=%s' % (kgl.importance if kgl else None,
+          and (kgl.inclusion or '') == 'optional',
+          '工程开工令 is optional (收录, 二-05)',
+          '%s required=%s' % (getattr(kgl, 'inclusion', None),
                               item_required(kgl) if kgl else None), failures)
-    check(cover is not None and item_required(cover) is True,
-          '竣工验收报告封面 is required (重要项)',
-          cover.importance if cover else None, failures)
-    check(divider is not None and item_required(divider) is False,
-          '验收资料隔页 is optional (一般项)',
-          divider.importance if divider else None, failures)
+    check(kgb is not None and item_required(kgb) is False,
+          '开工报审表 二-01 is optional',
+          getattr(kgb, 'inclusion', None), failures)
+    check(all(not item_required(catalog.by_id[i]) for i in OPTIONAL_TEMPLATED_IDS
+              if i in catalog.by_id),
+          '二-01～二-05 all optional',
+          [i for i in OPTIONAL_TEMPLATED_IDS if item_required(catalog.by_id.get(i))],
+          failures)
+    check(bid is not None and item_required(bid) is False,
+          'upload 中标通知书 is optional',
+          getattr(bid, 'inclusion', None), failures)
+    check(cover is not None and item_required(cover) is True
+          and (cover.inclusion or '') == 'required',
+          '竣工验收报告封面 is required (templated, 收录)',
+          cover.inclusion if cover else None, failures)
+    check(divider is not None and item_required(divider) is True,
+          '验收资料隔页 is required (templated; 一般项 ≠ optional)',
+          'importance=%s inclusion=%s' % (
+              getattr(divider, 'importance', None),
+              getattr(divider, 'inclusion', None)), failures)
+    check(sgrz is not None and item_required(sgrz) is True,
+          '施工日志 is required (templated, not 二-01～05)',
+          getattr(sgrz, 'inclusion', None), failures)
+    check(resolve_inclusion(item_id='二-05', csv_value='', is_upload=False) == 'optional'
+          and resolve_inclusion(item_id='六-01', csv_value='', is_upload=False) == 'required'
+          and resolve_inclusion(item_id='一-01', csv_value='', is_upload=True) == 'optional',
+          'empty 收录 falls back to first-version roster',
+          'ok', failures)
+    uploads_req = [it.item_id for it in catalog.items
+                   if not find_template(TEMPLATES, it) and item_required(it)]
+    check(not uploads_req, 'all upload items optional',
+          uploads_req[:6] or 'none', failures)
 
     numbering_five_cases(failures)
 
@@ -343,21 +376,30 @@ def main() -> int:
     check(snap_req == n_req, 'snapshot required flags',
           '%d (expect %d)' % (snap_req, n_req), failures)
 
-    # paths / filenames — required numbered / 3-digit / blank-upload
+    # paths / filenames — required numbered / 3-digit / required cover
     kg = '二、过程分册/7、设备开箱验收记录/YY123-SBKXYSJL-01_设备开箱验收记录.docx'
     trial = ('五、初步验收分册（政务信息化项目）/6、试运行记录表/'
              'YY123-SYXJLB-001_试运行记录表.docx')
-    blank = '一、依据分册/2、合同及补充协议复印件/合同及补充协议复印件.docx'
+    cover_path = '六、竣工验收报告/1、封面/封面.docx'
     optional_kgl = '二、过程分册/5、工程开工令'
+    optional_bid = '一、依据分册/1、中标通知书'
     check((book / kg).is_file(), 'required numbered path', kg, failures)
     check((book / trial).is_file(), 'required 3-digit numbered path', trial, failures)
-    check((book / blank).is_file(), 'required upload-as-blank path', blank, failures)
+    check((book / cover_path).is_file(), 'required templated path', cover_path, failures)
     kgl_files = list((book / optional_kgl).glob('*')) if (book / optional_kgl).exists() else []
     check(not kgl_files and '二-05' not in (data.get('_docs') or {}),
           'optional 工程开工令 not auto-created',
           'files=%s docs=%s' % (len(kgl_files),
                                 [k for k, r in (data.get('_docs') or {}).items()
                                  if r.get('itemId') == '二-05']), failures)
+    bid_files = list((book / optional_bid).glob('*')) if (book / optional_bid).exists() else []
+    check(not bid_files, 'upload optional 中标通知书 not auto-created',
+          'files=%s' % len(bid_files), failures)
+    snap_incl = {it.get('itemId'): it.get('inclusion') for it in snap}
+    check(snap_incl.get('二-05') == 'optional' and snap_incl.get('六-01') == 'required',
+          'snapshot inclusion flags',
+          '二-05=%s 六-01=%s' % (snap_incl.get('二-05'), snap_incl.get('六-01')),
+          failures)
     gen_docx = [p for p in book.rglob('*.docx') if not p.name.startswith('~$')]
     check(len(gen_docx) == n_req, 'generated docx count = required',
           '%d (expect %d required, catalog %d)' % (
@@ -449,15 +491,9 @@ def main() -> int:
               'ok' if not mismatch else str(mismatch[:4]), failures)
 
     log = '二、过程分册/10、施工日志/YY123-SGRZ-001_施工日志.docx'
-    proc_log = run_cmd([
-        sys.executable, str(ENGINE / 'docgen_engine.py'),
-        '--project', str(pj), '--item', '二-10', '--count', '1',
-        '--out', str(book), '--json',
-    ])
-    check(proc_log.returncode == 0 and (book / log).is_file(),
-          'optional 施工日志 on-demand create',
-          last_json_line(proc_log.stdout).get('summary') if proc_log.stdout.strip() else '',
-          failures)
+    check((book / log).is_file(),
+          'required 施工日志 from booklet',
+          log, failures)
     log_doc = book / log
     if log_doc.is_file():
         with zipfile.ZipFile(log_doc) as z:
@@ -477,7 +513,7 @@ def main() -> int:
     verrs = pv.get('errors') or []
     opt_hits = [e for e in verrs if any(
         name in str(e.get('reason') or '') + str(e.get('file') or '')
-        for name in ('工程开工令', '施工日志', '项目周报', '中标通知书', 'optional not selected'))]
+        for name in ('工程开工令', '开工报审表', '中标通知书', 'optional not selected'))]
     check(not opt_hits, 'verify does not fail on absent optionals',
           opt_hits[:3] or 'clean', failures)
 

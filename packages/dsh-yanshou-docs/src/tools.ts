@@ -90,7 +90,7 @@ export function registerTools(ctx: Context, config: Config): void {
       description:
         '按目录清单生成文档：有模板的套模板，无模板的按 mode 三选一' +
         '（template 选一个备用模板 / blank 建空白 / upload 占位等用户传 / skip 跳过）。' +
-        'itemId=all 时只生成软件目录中的必填项（重要项）以及已经建过表的可选项，' +
+        'itemId=all 时只生成字典「收录」为 required 的项以及已经建过表的可选项，' +
         '不会批量新建可选表。默认跳过已存在的文档，保护用户的编辑成果。确定性批处理，不调用模型推理。',
       parameters: {
         itemId: {

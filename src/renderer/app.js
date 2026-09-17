@@ -134,13 +134,15 @@ function renderTree() {
       const mark = req
         ? '<span class="badge-req">必填</span>'
         : '<span class="badge-opt">可选</span>';
+      const emptyCls = empty ? (req ? ' tn-miss' : ' tn-empty') : '';
+      const dot = it.dot || (empty ? (req ? 'red' : 'gray') : 'gray');
       html.push(
-        '<div class="tn lv2' + on + (empty ? ' tn-empty' : '') +
+        '<div class="tn lv2' + on + emptyCls +
         '" data-item="' + it.itemId + '" data-kind="catalog">' +
         '<span class="caret">' + (docs.length > 1 ? '·' : '·') + '</span>' +
         escapeHtml(String(it.seq).padStart(2, '0') + ' ' + it.name) +
         mark + print +
-        '<span class="dot d-' + (it.dot || 'gray') + '" title="' +
+        '<span class="dot d-' + dot + '" title="' +
         (empty ? (req ? '必填 · 尚未建表' : '可选 · 尚未建表') : (it.fillState || 'empty')) +
         '"></span></div>'
       );
@@ -349,7 +351,7 @@ function renderLedger() {
     '<div class="metric"><div class="lab">目录项总数</div><div class="num">' + L.total + '</div></div>' +
     '<div class="metric"><div class="lab">必填项</div><div class="num">' + (L.required || 0) + '</div></div>' +
     '<div class="metric"><div class="lab">已完成</div><div class="num" style="color:var(--green)">' + L.complete + '</div></div>' +
-    '<div class="metric"><div class="lab">必填未建</div><div class="num" style="color:var(--amber)">' + (L.requiredEmpty || 0) + '</div></div>' +
+    '<div class="metric"><div class="lab">必填未建</div><div class="num" style="color:var(--red)">' + (L.requiredEmpty || 0) + '</div></div>' +
     '</div>' +
     '<div class="bar"><i style="width:' + g + '%;background:var(--green)"></i>' +
     '<i style="width:' + b + '%;background:var(--accent)"></i>' +
@@ -367,7 +369,7 @@ function renderLedger() {
 
 function renderJobs() {
   const jobs = state.jobs.length ? state.jobs : [
-    { ico: 'wait', name: '等待一键成册', detail: '点 Ribbon「一键成册」调用 datafill → fill → docgen → verify', time: '' },
+    { ico: 'wait', name: '等待生成必选', detail: '点 Ribbon「生成必选」调用 datafill → fill → docgen → verify', time: '' },
   ];
   $('mainPane').innerHTML = '<div class="jobs" style="border:none">' + jobs.map((j) => (
     '<div class="job"><span class="j-ico j-' + j.ico + '">' +
@@ -381,7 +383,7 @@ function renderJobs() {
 async function renderPreview() {
   const doc = currentDoc();
   if (!doc) {
-    $('mainPane').innerHTML = '<p class="empty-hint">选一份<strong>已生成</strong>的文档查看只读预览。<br>空的可选行不会自动建表：右键「新建表格」。必填项可点「一键成册」。</p>';
+    $('mainPane').innerHTML = '<p class="empty-hint">选一份<strong>已生成</strong>的文档查看只读预览。<br>未建表的目录项不会自动建文件：右键「新建表格」。必填项可点「生成必选」。</p>';
     return;
   }
   $('mainPane').innerHTML = '<p class="empty-hint">正在打开预览…</p>';
@@ -438,7 +440,7 @@ function paintEditor(html, note) {
 async function renderEditor() {
   const doc = currentDoc();
   if (!doc) {
-    $('mainPane').innerHTML = '<p class="empty-hint">选一份<strong>已生成</strong>的文档编辑正文 / 表格文字。<br>空的可选行不会自动建表：右键「新建表格」。模板资产不可打开写入。</p>';
+    $('mainPane').innerHTML = '<p class="empty-hint">选一份<strong>已生成</strong>的文档编辑正文 / 表格文字。<br>未建表的目录项不会打开编辑器：右键「新建表格」。模板资产不可打开写入。</p>';
     return;
   }
   if (!state.editor.available) {
@@ -548,6 +550,7 @@ function selectItem(itemId, docId) {
     state.selectedDocId = docs[0] ? docs[0].docId : null;
   }
   if (!docs.length) {
+    // form-type with no instance: never invent a file / never open the editor
     state.view = 'preview';
   } else {
     state.view = state.editor.available ? 'edit' : 'preview';
@@ -572,8 +575,13 @@ document.querySelectorAll('.tab').forEach((el) => {
 });
 document.querySelectorAll('.etab').forEach((el) => {
   el.addEventListener('click', () => {
-    state.view = el.dataset.view;
-    document.querySelectorAll('.etab').forEach((t) => t.classList.toggle('on', t === el));
+    let next = el.dataset.view;
+    if ((next === 'edit') && !currentDoc()) {
+      toast('该项尚未建表，无法打开编辑器。右键「新建表格」。');
+      next = 'preview';
+    }
+    state.view = next;
+    document.querySelectorAll('.etab').forEach((t) => t.classList.toggle('on', t.dataset.view === state.view));
     if (state.view === 'ledger') renderLedger();
     else if (state.view === 'jobs') renderJobs();
     else if (state.view === 'tables') renderTables();
@@ -610,7 +618,7 @@ $('treePane').addEventListener('contextmenu', (e) => {
   menu.dataset.doc = item.dataset.doc || '';
   const docs = state.docs.filter((d) => d.itemId === item.dataset.item && d.exists);
   const hasDoc = !!(item.dataset.doc || docs.length);
-  menu.querySelector('[data-ctx="open"]').disabled = !hasDoc;
+  menu.querySelector('[data-ctx="open"]').disabled = false;
   menu.querySelector('[data-ctx="delete"]').disabled = !hasDoc;
   menu.style.left = e.clientX + 'px';
   menu.style.top = e.clientY + 'px';
@@ -654,7 +662,7 @@ async function createCatalogItem(itemId) {
 function openCatalogItem(itemId, docId) {
   const docs = state.docs.filter((d) => d.itemId === itemId && d.exists);
   if (!docs.length) {
-    toast('该项尚未建表。可选表请右键「新建表格」；必填表也可点「一键成册」。');
+    toast('该项尚未建表。右键「新建表格」创建实例；必填项也可点「生成必选」。');
     selectItem(itemId);
     return;
   }
@@ -912,7 +920,7 @@ async function onAct(act) {
     state.view = 'jobs';
     document.querySelectorAll('.etab').forEach((t) => t.classList.toggle('on', t.dataset.view === 'jobs'));
     state.jobs = [
-      { ico: 'run', name: '一键成册 · 运行中', detail: 'datafill → fill → docgen → verify', time: '' },
+      { ico: 'run', name: '生成必选 · 运行中', detail: 'datafill → fill → docgen → verify', time: '' },
       { ico: 'wait', name: 'datafill 取值装配', detail: '等待', time: '' },
       { ico: 'wait', name: 'fill 填充', detail: '等待', time: '' },
       { ico: 'wait', name: 'docgen 生成', detail: '等待', time: '' },
@@ -930,7 +938,7 @@ async function onAct(act) {
       }));
       state.jobs.unshift({
         ico: payload.ok ? 'ok' : 'err',
-        name: '一键成册',
+        name: '生成必选',
         detail: payload.summary || '',
         time: '',
       });

@@ -201,8 +201,11 @@ def test_offline_docs_and_gate(failures: list) -> None:
     pack = (SOURCE / 'docs' / '打包说明.md').read_text(encoding='utf-8')
     check('断网' in manual or '离线' in manual, 'manual mentions offline',
           '使用手册', failures)
-    check('新建表格' in manual and '必填' in manual and '可选' in manual,
+    check('新建表格' in manual and '必填' in manual and '可选' in manual
+          and '生成必选' in manual,
           'manual on-demand catalog', '使用手册', failures)
+    html = (SOURCE / 'src' / 'renderer' / 'index.html').read_text(encoding='utf-8')
+    check('生成必选' in html, 'ribbon label 生成必选', 'index.html', failures)
     check('dsh' in pack.lower() and '420' in pack, 'pack docs dsh optional size',
           '打包说明', failures)
     check('electron-builder' in pack and 'nsis' in pack.lower(),
