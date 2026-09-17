@@ -118,6 +118,33 @@ def main() -> int:
     dots = {it.get('dot') for it in st.get('items') or []}
     check(dots <= {'gray', 'blue', 'green', 'red'} and 'gray' in dots,
           'fill dots gray/blue/green/red only', str(dots), failures)
+    by_id = {it.get('itemId'): it for it in st.get('items') or []}
+    check(by_id.get('二-05', {}).get('required') is False,
+          '工程开工令 optional in snapshot',
+          str((by_id.get('二-05') or {}).get('required')), failures)
+    check(by_id.get('二-01', {}).get('required') is False,
+          '开工报审表 二-01 optional',
+          str((by_id.get('二-01') or {}).get('required')), failures)
+    check(by_id.get('一-01', {}).get('required') is False,
+          'upload 中标通知书 optional',
+          str((by_id.get('一-01') or {}).get('required')), failures)
+    check(by_id.get('六-01', {}).get('required') is True,
+          '验收报告封面 required in snapshot',
+          str((by_id.get('六-01') or {}).get('required')), failures)
+    check(by_id.get('八-03', {}).get('required') is True,
+          '验收资料隔页 required (收录, not 一般项)',
+          str((by_id.get('八-03') or {}).get('required')), failures)
+    check((by_id.get('二-05') or {}).get('dot') == 'gray'
+          and not (by_id.get('二-05') or {}).get('docs'),
+          'optional empty row is gray, no instance',
+          str(by_id.get('二-05')), failures)
+    check((by_id.get('六-01') or {}).get('dot') == 'red'
+          and not (by_id.get('六-01') or {}).get('docs'),
+          'required empty row is red, no instance',
+          str(by_id.get('六-01')), failures)
+    check('red' in dots and 'gray' in dots,
+          'fresh project has red (required empty) and gray (optional empty)',
+          str(dots), failures)
 
     # save a field
     proc = run([
@@ -131,7 +158,49 @@ def main() -> int:
     check(data.get('buildSite') == '岳阳市测试地点', 'field persisted',
           str(data.get('buildSite')), failures)
 
+    print('\n-- on-demand create-item (GUI 新建表格)')
+    proc = run([
+        sys.executable, str(BRIDGE), '--action', 'create-item',
+        '--project', str(root / 'project.json'), '--item', '二-05', '--json',
+    ])
+    check(proc.returncode == 0, 'create-item exit',
+          'exit %d %s' % (proc.returncode, (proc.stderr or '')[-200:]), failures)
+    created_item = last_json(proc.stdout) if proc.returncode == 0 else {}
+    st2 = created_item.get('stats') or {}
+    kgl = next((it for it in (st2.get('items') or []) if it.get('itemId') == '二-05'), None)
+    kgb = next((it for it in (st2.get('items') or []) if it.get('itemId') == '二-01'), None)
+    kgl_docs = [d for d in ((kgl or {}).get('docs') or []) if d.get('exists')]
+    check(kgl and kgl_docs and (root / kgl_docs[0]['relPath']).is_file(),
+          '新建表格 adds one 工程开工令 instance',
+          str(kgl_docs[:1]), failures)
+    check(not [d for d in ((kgb or {}).get('docs') or []) if d.get('exists')],
+          'create-item does not invent other optionals',
+          str((kgb or {}).get('docs')), failures)
+    proc = run([
+        sys.executable, str(BRIDGE), '--action', 'booklet',
+        '--project', str(root / 'project.json'), '--json',
+    ], timeout=180)
+    check(proc.returncode == 0, 'booklet after optional create',
+          'exit %d' % proc.returncode, failures)
+    proc = run([
+        sys.executable, str(BRIDGE), '--action', 'open',
+        '--project', str(root / 'project.json'), '--json',
+    ])
+    after = last_json(proc.stdout) if proc.returncode == 0 else {}
+    st3 = after.get('stats') or {}
+    kgl2 = next((it for it in (st3.get('items') or []) if it.get('itemId') == '二-05'), None)
+    check(len([d for d in ((kgl2 or {}).get('docs') or []) if d.get('exists')]) == 1,
+          'booklet does not mass-create extra 开工令',
+          str((kgl2 or {}).get('docs')), failures)
+    n_req = sum(1 for it in (st3.get('items') or []) if it.get('required'))
+    n_with = sum(1 for it in (st3.get('items') or [])
+                 if any(d.get('exists') for d in (it.get('docs') or [])))
+    check(n_with == n_req + 1,
+          'booklet instances = required + preselected optional',
+          'with=%d required=%d' % (n_with, n_req), failures)
+
     # print state: need a docId — register a fake one then mark
+    data = read_project(root / 'project.json')
     data['_docs']['D-SMOKE-01'] = {
         'itemId': '二-01',
         'relPath': 'missing.docx',

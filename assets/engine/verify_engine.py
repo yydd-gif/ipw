@@ -23,8 +23,8 @@ for _p in (_HERE.parent.parent, _HERE):
         sys.path.insert(0, _s)
 
 from _common import (
-    BASE, DICT_PATH, emit_progress, emit_result, exit_env, exit_param,
-    result_payload, wns_tag,
+    ABBR_PATH, BASE, DICT_PATH, SPEC, emit_progress, emit_result, exit_env,
+    exit_param, result_payload, wns_tag,
 )
 
 REPO = BASE.parent
@@ -33,6 +33,8 @@ if str(REPO) not in sys.path:
 
 from lib.numbering import parse_seq  # noqa: E402
 from lib.project_store import ProjectStoreError, read_project  # noqa: E402
+from lib.catalog_flags import item_required  # noqa: E402
+from lib.rule_engine import load_catalog  # noqa: E402
 
 W_T = wns_tag('t')
 W_P = wns_tag('p')
@@ -239,6 +241,51 @@ def check_missing_files(project: dict, root: Path) -> list:
                 'reason': '文档缺失：_docs[%s] 指向的文件不存在' % did,
                 'level': 'block',
             })
+    return errors
+
+
+def _live_item_ids(project: dict) -> set:
+    trash = set()
+    for t in project.get('_trash') or []:
+        if isinstance(t, dict) and t.get('docId'):
+            trash.add(t['docId'])
+        for d in t.get('documents') or []:
+            if isinstance(d, dict) and d.get('docId'):
+                trash.add(d['docId'])
+    out = set()
+    for did, rec in (project.get('_docs') or {}).items():
+        if did in trash or not isinstance(rec, dict):
+            continue
+        if rec.get('skipped'):
+            continue
+        iid = rec.get('itemId')
+        if iid:
+            out.add(iid)
+    return out
+
+
+def check_catalog_presence(project: dict) -> list:
+    """Missing required catalog rows → warn. Missing optionals are not findings."""
+    errors = []
+    try:
+        catalog = load_catalog(ABBR_PATH, SPEC / '分册别名表.csv')
+        items = catalog.items
+    except (OSError, ValueError):
+        items = ((project.get('_catalogSnapshot') or {}).get('items') or [])
+    live = _live_item_ids(project)
+    for it in items:
+        iid = getattr(it, 'item_id', None) or (it.get('itemId') if isinstance(it, dict) else '')
+        name = getattr(it, 'name', None) or (it.get('name') if isinstance(it, dict) else '')
+        if not iid:
+            continue
+        if item_required(it):
+            if iid not in live:
+                errors.append({
+                    'file': 'catalog', 'part': '-', 'key': iid, 'loc': iid,
+                    'reason': '必填目录项尚未建表：%s %s' % (iid, name),
+                    'level': 'warn',
+                })
+        # optional with no instance: not a verification failure
     return errors
 
 
@@ -455,6 +502,7 @@ def main() -> int:
             return exit_env(str(e), a.as_json, 'verify')
         errors.extend(check_required(project))
         errors.extend(check_missing_files(project, a.dir))
+        errors.extend(check_catalog_presence(project))
         errors.extend(check_numbering(project))
         errors.extend(check_unit_consistency(a.dir))
         errors.extend(check_amount(project))

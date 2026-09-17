@@ -2,6 +2,7 @@
 """目录快照 / 模板定位 / 工程内路径.
 
 清单规模以 `表名缩写字典.csv` 为准（56 = 37 有模板 + 19 上传项）。
+必填/可选以字典「收录」列（`inclusion`）为准，见 lib.catalog_flags。
 分册名一律走别名表标准名，才能对上 `assets/templates/` 的实际目录。
 """
 from __future__ import annotations
@@ -10,6 +11,7 @@ import hashlib
 from pathlib import Path
 from typing import List, Optional
 
+from lib.catalog_flags import item_inclusion, item_required
 from lib.rule_engine import Catalog, CatalogItem, load_catalog
 
 UPLOAD_TYPE = '上传附件'
@@ -77,7 +79,9 @@ def snapshot_item(item: CatalogItem, templates: Path) -> dict:
         'relPath': item_folder(item),
         'hasTemplate': has,
         'dataType': data_type_for(item, has),
-        'importance': '普通项',
+        'importance': item.importance or '普通项',
+        'inclusion': item_inclusion(item),
+        'required': item_required(item),
         'templateFile': tpl.name if tpl else '',
         'abbr': item.abbr,
         'docDigits': item.digits,

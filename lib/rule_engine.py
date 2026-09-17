@@ -83,6 +83,9 @@ class CatalogItem:
     abbr: str
     digits: int
     numbered: bool
+    importance: str = '普通项'  # 重要项 / 普通项 / 一般项（软件目录.docx 元数据，不成册依据）
+    inclusion: str = 'optional'  # required / optional（字典「收录」列）
+    required: bool = False      # inclusion==required：生成必选会建表；可选默认无实例
 
 
 @dataclass
@@ -356,6 +359,8 @@ def load_catalog(abbr_path: Path, alias_path: Path | None = None) -> Catalog:
                         volume_seq[alias] = seq
                         volume_seq[std or alias] = seq
 
+    from lib.catalog_flags import is_upload_status, resolve_inclusion
+
     items: List[CatalogItem] = []
     by_id: Dict[str, CatalogItem] = {}
     if Path(abbr_path).exists():
@@ -375,15 +380,36 @@ def load_catalog(abbr_path: Path, alias_path: Path | None = None) -> Catalog:
                 cn = CN_VOL[vseq - 1] if 1 <= vseq <= 8 else '?'
                 item_id = '%s-%02d' % (cn, seq)
                 numbered = (row.get('启用编号') or '').strip() == '是'
+                inclusion = resolve_inclusion(
+                    item_id=item_id,
+                    csv_value=row.get('收录') or '',
+                    is_upload=is_upload_status(row.get('模板状态') or ''),
+                )
                 it = CatalogItem(
                     item_id=item_id, volume=std or vol_raw, volume_seq=vseq,
                     seq=seq, name=(row.get('目录项名') or '').strip(),
                     abbr=(row.get('表名缩写') or '').strip(),
                     digits=digits, numbered=numbered,
+                    inclusion=inclusion,
+                    required=(inclusion == 'required'),
                 )
                 items.append(it)
                 by_id[item_id] = it
-    return Catalog(items=items, by_id=by_id, volume_alias=volume_alias, volume_seq=volume_seq)
+    catalog = Catalog(items=items, by_id=by_id, volume_alias=volume_alias,
+                      volume_seq=volume_seq)
+    _apply_catalog_importance(catalog, abbr_path)
+    return catalog
+
+
+def _apply_catalog_importance(catalog: Catalog, abbr_path: Path) -> None:
+    """Merge 软件目录.docx 重要项/普通项 onto CSV rows as metadata only."""
+    from lib.catalog_flags import apply_importance, catalog_docx_path, parse_software_catalog
+    docx = catalog_docx_path(abbr_path)
+    if not docx:
+        return
+    flags = parse_software_catalog(
+        docx, volume_alias=catalog.volume_alias, volume_seq=catalog.volume_seq)
+    apply_importance(catalog.items, flags)
 
 
 def _guess_vol_seq(name: str) -> int:

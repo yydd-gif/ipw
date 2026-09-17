@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('api', {
   saveAssets: (opts) => ipcRenderer.invoke('save-assets', opts),
   applySubtables: (opts) => ipcRenderer.invoke('apply-subtables', opts),
   booklet: (projectPath) => ipcRenderer.invoke('booklet', projectPath),
+  createItem: (opts) => ipcRenderer.invoke('create-item', opts),
   preview: (opts) => ipcRenderer.invoke('preview', opts),
   markPrinted: (opts) => ipcRenderer.invoke('mark-printed', opts),
   exportPdf: (opts) => ipcRenderer.invoke('export-pdf', opts),

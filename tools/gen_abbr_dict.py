@@ -19,6 +19,9 @@ import os
 import re
 import zipfile
 
+_sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
+from lib.catalog_flags import default_inclusion  # noqa: E402
+
 TPL_ROOT = str(TEMPLATES)
 OUT = str(WORK / '表名缩写字典.generated.csv')
 
@@ -167,9 +170,17 @@ def main():
             note.append('上传项，无模板')
         elif not label:
             note.append('模板内无「文档编号」标签，不编号')
-        rows.append([vol, no, name, '有模板' if has_tpl else '上传项', abbr,
-                     len(abbr), width, '是' if label else '否',
-                     '是' if label else '否', '；'.join(note)])
+        cn = (vol or '？')[0]
+        item_id = '%s-%02d' % (cn, int(no))
+        rows.append([
+            vol, no, name,
+            '有模板' if has_tpl else '上传项',
+            default_inclusion(item_id=item_id, is_upload=not has_tpl),
+            abbr, len(abbr), width,
+            '是' if label else '否',
+            '是' if label else '否',
+            '；'.join(note),
+        ])
         if abbr in seen:
             dup.append((abbr, seen[abbr], f'{vol}{no}.{name}'))
         else:
@@ -177,19 +188,19 @@ def main():
 
     with open(OUT, 'w', newline='', encoding='utf-8-sig') as f:
         w = csv.writer(f)
-        w.writerow(['分册', '序号', '目录项名', '模板状态', '表名缩写', '缩写长度',
+        w.writerow(['分册', '序号', '目录项名', '模板状态', '收录', '表名缩写', '缩写长度',
                     '流水号位数', '含编号标签', '启用编号', '备注'])
         w.writerows(rows)
 
-    on = [r for r in rows if r[8] == '是']
+    on = [r for r in rows if r[9] == '是']
     print(f'共 {len(rows)} 项 -> {OUT}')
     print(f'启用编号 {len(on)} 项（模板内含「文档编号」标签）：')
     for r in on:
-        print(f"  {r[0][:2]} {r[1]:>2}. {r[2]:<18} {r[4]}")
+        print(f"  {r[0][:2]} {r[1]:>2}. {r[2]:<18} {r[5]}")
     print(f'\n未收录汉字: {sorted(missing) if missing else "无"}')
     print(f'缩写重复: {dup if dup else "无"}')
     print(f'缩写超 10 位: {[d[0] + " <- " + d[1] for d in [(a, n) for a, n in
-          [(r[4], f"{r[0]}{r[1]}.{r[2]}") for r in rows] if len(a) > 10]]}')
+          [(r[5], f"{r[0]}{r[1]}.{r[2]}") for r in rows] if len(a) > 10]]}')
 
 
 if __name__ == '__main__':
