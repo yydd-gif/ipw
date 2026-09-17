@@ -78,6 +78,7 @@ def snapshot_item(item: CatalogItem, templates: Path) -> dict:
         'relPath': item_folder(item),
         'hasTemplate': has,
         'dataType': data_type_for(item, has),
+        # importance 仅展示；收录只看字典 inclusion，不从 软件目录.docx 重要/普通推导
         'importance': '普通项',
         'templateFile': tpl.name if tpl else '',
         'abbr': item.abbr,

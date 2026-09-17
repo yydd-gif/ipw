@@ -129,13 +129,15 @@ function renderTree() {
       const print = it.printed ? '<span class="badge-print">印</span>' : '';
       const docs = (it.docs || []).filter((d) => d && (d.exists !== false));
       const empty = docs.length === 0;
-      const emptyCls = empty ? ' empty-opt' : '';
-      const inc = it.inclusion === 'required' ? '必选' : '可选';
+      const required = it.inclusion === 'required';
+      const emptyCls = empty ? (required ? ' empty-req' : ' empty-opt') : '';
+      const inc = required ? '必选' : '可选';
       const title = empty
-        ? (inc + ' · 尚未创建，右键「新建表格」')
+        ? (required ? (inc + ' · 未生成') : (inc + ' · 尚未创建（不是缺项）'))
         : (inc + ' · ' + (it.fillState || 'empty'));
       html.push(
-        '<div class="tn lv2' + on + emptyCls + '" data-item="' + it.itemId + '">' +
+        '<div class="tn lv2' + on + emptyCls + '" data-item="' + it.itemId +
+        '" data-kind="table">' +
         '<span class="caret">·</span>' +
         escapeHtml(String(it.seq).padStart(2, '0') + ' ' + it.name) +
         print +
@@ -147,7 +149,7 @@ function renderTree() {
         const label = doc.docNo || (doc.relPath || '').split('/').pop() || doc.docId;
         html.push(
           '<div class="tn lv3' + don + '" data-item="' + it.itemId + '" data-doc="' +
-          escapeHtml(doc.docId) + '">' +
+          escapeHtml(doc.docId) + '" data-kind="instance">' +
           '<span class="caret">·</span>' +
           escapeHtml(label) +
           '</div>'
@@ -362,7 +364,7 @@ function renderLedger() {
 
 function renderJobs() {
   const jobs = state.jobs.length ? state.jobs : [
-    { ico: 'wait', name: '等待一键成册', detail: '点 Ribbon「一键成册」只生成必选目录项（datafill → fill → docgen → verify）', time: '' },
+    { ico: 'wait', name: '等待生成必选', detail: '点 Ribbon「生成必选」只生成必选目录项（datafill → fill → docgen → verify）', time: '' },
   ];
   $('mainPane').innerHTML = '<div class="jobs" style="border:none">' + jobs.map((j) => (
     '<div class="job"><span class="j-ico j-' + j.ico + '">' +
@@ -376,7 +378,7 @@ function renderJobs() {
 async function renderPreview() {
   const doc = currentDoc();
   if (!doc) {
-    $('mainPane').innerHTML = '<p class="empty-hint">选一份已生成的文档查看只读预览。<br>可选目录项默认无实例（灰点）；右键「新建表格」创建。一键成册只生成必选。</p>';
+    $('mainPane').innerHTML = '<p class="empty-hint">选一份已生成的文档查看只读预览。<br>可选未创建是灰点（不是缺项）；必选未生成是红点。点实例才打开右侧，右键「新建表格」创建。</p>';
     return;
   }
   $('mainPane').innerHTML = '<p class="empty-hint">正在打开预览…</p>';
@@ -433,7 +435,7 @@ function paintEditor(html, note) {
 async function renderEditor() {
   const doc = currentDoc();
   if (!doc) {
-    $('mainPane').innerHTML = '<p class="empty-hint">选一份已生成的文档编辑正文 / 表格文字。<br>可选目录项默认无实例；右键「新建表格」创建。模板资产不可打开写入。</p>';
+    $('mainPane').innerHTML = '<p class="empty-hint">选一份已生成的文档编辑正文 / 表格文字。<br>未创建的目录项请右键「新建表格」。点已有实例才打开编辑。模板资产不可打开写入。</p>';
     return;
   }
   if (!state.editor.available) {
@@ -534,18 +536,38 @@ function applyOpen(payload) {
   else renderPreview();
 }
 
-function selectItem(itemId, docId) {
+function liveDocsFor(itemId) {
+  return state.docs.filter((d) => d.itemId === itemId && d.exists);
+}
+
+function selectCatalogRow(itemId) {
   state.selectedItemId = itemId;
-  const docs = state.docs.filter((d) => d.itemId === itemId && d.exists);
+  state.selectedDocId = null;
+  renderTree();
+}
+
+function selectInstance(itemId, docId) {
+  state.selectedItemId = itemId;
+  const docs = liveDocsFor(itemId);
   if (docId && docs.some((d) => d.docId === docId)) {
     state.selectedDocId = docId;
   } else {
     state.selectedDocId = docs[0] ? docs[0].docId : null;
   }
-  state.view = state.selectedDocId ? (state.editor.available ? 'edit' : 'preview') : 'preview';
+  if (!state.selectedDocId) {
+    toast('尚未创建实例，请先「新建表格」');
+    renderTree();
+    return;
+  }
+  state.view = state.editor.available ? 'edit' : 'preview';
   document.querySelectorAll('.etab').forEach((t) => t.classList.toggle('on', t.dataset.view === state.view));
   renderTree();
   showMainView();
+}
+
+function selectItem(itemId, docId) {
+  if (docId) selectInstance(itemId, docId);
+  else selectCatalogRow(itemId);
 }
 
 function hideTreeMenu() {
@@ -574,7 +596,8 @@ async function newTable(itemId) {
     const gen = (payload.stats && payload.stats.generate) || {};
     const created = ((gen.items || payload.items) || []).find((x) => x.action === 'created')
       || ((gen.items || [])[0]);
-    selectItem(itemId, created && created.docId);
+    if (created && created.docId) selectInstance(itemId, created.docId);
+    else selectCatalogRow(itemId);
     toast(payload.summary || gen.summary || '已新建表格');
   } catch (err) {
     toast('新建表格失败：' + err.message);
@@ -617,7 +640,10 @@ $('treePane').addEventListener('click', (e) => {
     return;
   }
   const node = e.target.closest('[data-item]');
-  if (node) selectItem(node.dataset.item, node.dataset.doc || '');
+  if (node) {
+    if (node.dataset.doc) selectInstance(node.dataset.item, node.dataset.doc);
+    else selectCatalogRow(node.dataset.item);
+  }
 });
 
 $('treePane').addEventListener('contextmenu', (e) => {
@@ -627,6 +653,7 @@ $('treePane').addEventListener('contextmenu', (e) => {
   const menu = $('treeMenu');
   if (!menu) return;
   menu.dataset.item = node.dataset.item;
+  menu.dataset.doc = node.dataset.doc || '';
   menu.style.left = e.clientX + 'px';
   menu.style.top = e.clientY + 'px';
   menu.classList.remove('hidden');
@@ -644,8 +671,56 @@ if (treeMenu) {
     const btn = e.target.closest('[data-ctx]');
     if (!btn) return;
     const itemId = treeMenu.dataset.item;
+    const docId = treeMenu.dataset.doc || '';
     if (btn.dataset.ctx === 'new-table') newTable(itemId);
+    else if (btn.dataset.ctx === 'open') openTable(itemId, docId);
+    else if (btn.dataset.ctx === 'delete') deleteTable(itemId, docId);
   });
+}
+
+function openTable(itemId, docId) {
+  hideTreeMenu();
+  const docs = liveDocsFor(itemId);
+  const target = docId && docs.find((d) => d.docId === docId);
+  if (target) {
+    selectInstance(itemId, target.docId);
+    return;
+  }
+  if (docs[0]) {
+    selectInstance(itemId, docs[0].docId);
+    return;
+  }
+  toast('尚未创建实例，请先「新建表格」');
+}
+
+async function deleteTable(itemId, docId) {
+  hideTreeMenu();
+  if (!state.projectPath) {
+    toast('请先打开工程');
+    return;
+  }
+  const docs = liveDocsFor(itemId);
+  const target = (docId && docs.find((d) => d.docId === docId)) || docs[0];
+  if (!target) {
+    toast('没有可删除的实例');
+    return;
+  }
+  if (!window.confirm('删除该实例？编号不重排（删 02 留 03）。')) return;
+  try {
+    const payload = await api.trashPut({
+      projectPath: state.projectPath,
+      docId: target.docId,
+    });
+    if (!payload.ok) {
+      toast(payload.summary || '删除失败');
+      return;
+    }
+    applyOpen(payload);
+    selectCatalogRow(itemId);
+    toast(payload.summary || '已删除（编号不重排）');
+  } catch (err) {
+    toast('删除失败：' + err.message);
+  }
 }
 
 $('btnSync').addEventListener('click', saveFields);
@@ -878,7 +953,7 @@ async function onAct(act) {
     state.view = 'jobs';
     document.querySelectorAll('.etab').forEach((t) => t.classList.toggle('on', t.dataset.view === 'jobs'));
     state.jobs = [
-      { ico: 'run', name: '一键成册 · 运行中', detail: '仅必选 · datafill → fill → docgen → verify', time: '' },
+      { ico: 'run', name: '生成必选 · 运行中', detail: '仅必选 · datafill → fill → docgen → verify', time: '' },
       { ico: 'wait', name: 'datafill 取值装配', detail: '等待', time: '' },
       { ico: 'wait', name: 'fill 填充', detail: '等待', time: '' },
       { ico: 'wait', name: 'docgen 生成', detail: '等待', time: '' },
@@ -896,7 +971,7 @@ async function onAct(act) {
       }));
       state.jobs.unshift({
         ico: payload.ok ? 'ok' : 'err',
-        name: '一键成册',
+        name: '生成必选',
         detail: payload.summary || '',
         time: '',
       });

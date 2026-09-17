@@ -53,6 +53,7 @@ button,input,select,textarea{font-family:inherit;font-size:inherit;}
 .lv2{padding-left:18px;color:var(--text);}
 .lv3{padding-left:34px;color:var(--muted);font-size:12px;}
 .tn.empty-opt{color:var(--muted);}
+.tn.empty-req{color:var(--text);}
 .caret{width:12px;color:var(--hint);font-size:9px;flex:none;}
 .badge-n{font-size:10px;color:var(--hint);background:#eef0f4;border-radius:8px;padding:0 5px;margin-left:6px;}
 .dot{width:7px;height:7px;border-radius:50%;margin-left:auto;flex:none;}

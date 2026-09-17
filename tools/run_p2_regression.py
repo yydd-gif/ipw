@@ -26,7 +26,10 @@ sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(ENGINE))
 
 from lib.catalog_build import find_template, item_folder, numbered_filename  # noqa: E402
-from lib.inclusion import FIRST_CUT_REQUIRED_IDS, booklet_items, is_required  # noqa: E402
+from lib.inclusion import (  # noqa: E402
+    FIRST_CUT_OPTIONAL_COUNT, FIRST_CUT_OPTIONAL_TEMPLATE_IDS,
+    FIRST_CUT_REQUIRED_COUNT, booklet_items, is_required, parse_inclusion,
+)
 from lib.numbering import (  # noqa: E402
     allocate_one, apply_action, empty_pool, ensure_pool, make_prefix,
     release_one, restore_one,
@@ -46,8 +49,8 @@ ALIAS = SPEC / '分册别名表.csv'
 EXPECT_CATALOG = 56
 EXPECT_TPL = 37
 EXPECT_UPLOAD = 19
-EXPECT_REQUIRED = 5
-EXPECT_OPTIONAL = EXPECT_CATALOG - EXPECT_REQUIRED
+EXPECT_REQUIRED = FIRST_CUT_REQUIRED_COUNT  # 32 = 37 templates − 二-01～05
+EXPECT_OPTIONAL = FIRST_CUT_OPTIONAL_COUNT  # 24 = 19 upload + 5 optional templates
 WNS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 
 
@@ -228,16 +231,34 @@ def main() -> int:
                                  [it.item_id for it in catalog.items if is_required(it)]),
           failures)
     req_ids = tuple(it.item_id for it in booklet_items(catalog.items))
-    check(req_ids == FIRST_CUT_REQUIRED_IDS, 'first-cut required ids',
-          req_ids, failures)
+    check(len(req_ids) == EXPECT_REQUIRED, 'first-cut required count',
+          '%d ids' % len(req_ids), failures)
+    check(all(i not in req_ids for i in FIRST_CUT_OPTIONAL_TEMPLATE_IDS),
+          '二-01～05 not in booklet',
+          [i for i in FIRST_CUT_OPTIONAL_TEMPLATE_IDS if i in req_ids], failures)
+    check('二-10' in req_ids and '二-07' in req_ids,
+          'templated items other than 二-01～05 are required',
+          '二-10/二-07 in required', failures)
     upload_req = [it.item_id for it in catalog.items
                   if not find_template(TEMPLATES, it) and is_required(it)]
     check(not upload_req, 'upload items must be optional',
           str(upload_req) or 'none required', failures)
     opt_tpl = [it.item_id for it in catalog.items
                if find_template(TEMPLATES, it) and not is_required(it)]
-    check('二-10' in opt_tpl and '二-01' not in opt_tpl, 'template default optional except 二-01～05',
-          'optional-tpl=%d sample=%s' % (len(opt_tpl), opt_tpl[:3]), failures)
+    check(set(opt_tpl) == set(FIRST_CUT_OPTIONAL_TEMPLATE_IDS),
+          'only 二-01～05 templated items are optional',
+          'optional-tpl=%s' % opt_tpl, failures)
+    check(n_req + len([it for it in catalog.items if not is_required(it)]) == EXPECT_CATALOG
+          and EXPECT_OPTIONAL == EXPECT_CATALOG - EXPECT_REQUIRED,
+          '32 required + 24 optional = 56',
+          'req=%d opt=%d' % (n_req, EXPECT_OPTIONAL), failures)
+    check(parse_inclusion('重要', '二-01', '有模板') == 'optional'
+          and parse_inclusion('普通', '二-10', '有模板') == 'required',
+          '软件目录 重要/普通 must not drive 收录',
+          '重要→%s 普通→%s' % (
+              parse_inclusion('重要', '二-01', '有模板'),
+              parse_inclusion('普通', '二-10', '有模板')),
+          failures)
 
     numbering_five_cases(failures)
 
@@ -328,11 +349,12 @@ def main() -> int:
     data = read_project(pj)
     n_docs = len(data.get('_docs') or {})
     created_ids = [r.get('itemId') for r in (payload.get('items') or [])]
-    optional_in_all = [i for i in created_ids if i not in FIRST_CUT_REQUIRED_IDS]
-    check(not optional_in_all, 'all must not create optionals',
+    optional_in_all = [i for i in created_ids if i in FIRST_CUT_OPTIONAL_TEMPLATE_IDS
+                       or i not in req_ids]
+    check(not optional_in_all, 'all must not create optionals (DoD ⑤ FAIL if leak)',
           optional_in_all[:8], failures)
     check(n_docs == EXPECT_REQUIRED, '_docs count required-only',
-          '%d (expect %d; generating all 56 optionals must fail)' % (
+          '%d (expect %d; generating optionals into booklet must fail)' % (
               n_docs, EXPECT_REQUIRED), failures)
     check((payload.get('stats') or {}).get('selected') == EXPECT_REQUIRED,
           'all selected == required',
@@ -341,17 +363,21 @@ def main() -> int:
     check(len(snap) == EXPECT_CATALOG, 'catalog snapshot still lists all rows',
           '%d items' % len(snap), failures)
     snap_inc = {it.get('itemId'): it.get('inclusion') for it in snap}
-    check(snap_inc.get('二-01') == 'required' and snap_inc.get('一-01') == 'optional',
-          'snapshot inclusion column',
-          '二-01=%s 一-01=%s' % (snap_inc.get('二-01'), snap_inc.get('一-01')),
+    check(snap_inc.get('二-07') == 'required' and snap_inc.get('二-01') == 'optional'
+          and snap_inc.get('一-01') == 'optional',
+          'snapshot inclusion column (dictionary 收录 only)',
+          '二-07=%s 二-01=%s 一-01=%s' % (
+              snap_inc.get('二-07'), snap_inc.get('二-01'), snap_inc.get('一-01')),
           failures)
 
-    # paths / filenames — required 开工报审表 must exist; optionals must not
+    # paths — required numbered 设备开箱验收记录 / 施工日志 in booklet; 二-01 optional not
     kg = '二、过程分册/1、开工报审表/YY123-KGBSB-01_开工报审表.docx'
+    sb = '二、过程分册/7、设备开箱验收记录/YY123-SBKXYSJL-01_设备开箱验收记录.docx'
     log = '二、过程分册/10、施工日志/YY123-SGRZ-001_施工日志.docx'
     blank = '一、依据分册/1、中标通知书/中标通知书.docx'
-    check((book / kg).is_file(), 'numbered path (required)', kg, failures)
-    check(not (book / log).exists(), 'optional 施工日志 not in booklet', log, failures)
+    check((book / sb).is_file(), 'numbered path (required 二-07)', sb, failures)
+    check((book / log).is_file(), 'numbered path (required 施工日志)', log, failures)
+    check(not (book / kg).exists(), 'optional 开工报审表 not in booklet', kg, failures)
     check(not (book / blank).exists(), 'optional upload not in booklet', blank, failures)
     gen_docx = [p for p in book.rglob('*.docx') if not p.name.startswith('~$')]
     check(len(gen_docx) == EXPECT_REQUIRED, 'generated docx count required-only',
@@ -379,7 +405,17 @@ def main() -> int:
           'docs=%d files=%d' % (len(data2.get('_docs') or {}), len(gen_docx2)),
           failures)
 
-    # append second 开工报审表 → 02
+    # 新建表格：显式 --item 创建可选 开工报审表 → 01，再追加 02
+    proc_opt_kg = run_cmd([
+        sys.executable, str(ENGINE / 'docgen_engine.py'),
+        '--project', str(pj), '--item', '二-01', '--count', '1',
+        '--out', str(book), '--json',
+    ])
+    pok = last_json_line(proc_opt_kg.stdout) if proc_opt_kg.stdout.strip() else {}
+    kg1 = book / kg
+    check(proc_opt_kg.returncode == 0 and kg1.is_file(),
+          '新建表格 creates numbered optional 二-01',
+          str(pok.get('summary')), failures)
     proc3 = run_cmd([
         sys.executable, str(ENGINE / 'docgen_engine.py'),
         '--project', str(pj), '--item', '二-01', '--count', '1',
@@ -388,26 +424,30 @@ def main() -> int:
     p3 = last_json_line(proc3.stdout) if proc3.stdout.strip() else {}
     kg2 = book / '二、过程分册/1、开工报审表/YY123-KGBSB-02_开工报审表.docx'
     check(proc3.returncode == 0 and kg2.is_file(),
-          'append second numbered doc',
+          'append second numbered optional',
           str(p3.get('summary')), failures)
 
-    # 新建表格 equivalent: explicit --item creates an optional
     proc_opt = run_cmd([
         sys.executable, str(ENGINE / 'docgen_engine.py'),
         '--project', str(pj), '--item', '一-01', '--out', str(book), '--json',
     ])
     po = last_json_line(proc_opt.stdout) if proc_opt.stdout.strip() else {}
     check(proc_opt.returncode == 0 and (book / blank).is_file(),
-          'explicit item creates optional (新建表格)',
+          'explicit item creates optional upload (新建表格)',
           str(po.get('summary')), failures)
-    proc_log = run_cmd([
-        sys.executable, str(ENGINE / 'docgen_engine.py'),
-        '--project', str(pj), '--item', '二-10', '--out', str(book), '--json',
+
+    # verify after booklet+optional: optional never-created must not be a deficiency
+    proc_v0 = run_cmd([
+        sys.executable, str(ENGINE / 'verify_engine.py'),
+        '--dir', str(book), '--project', str(pj), '--level', 'all', '--json',
     ])
-    plog = last_json_line(proc_log.stdout) if proc_log.stdout.strip() else {}
-    check(proc_log.returncode == 0 and (book / log).is_file(),
-          'explicit 施工日志 (3-digit numbered optional)',
-          str(plog.get('summary')), failures)
+    pv0 = last_json_line(proc_v0.stdout) if proc_v0.stdout.strip() else {}
+    inc0 = [e for e in (pv0.get('errors') or []) if e.get('loc') == 'inclusion']
+    opt_inc = [e for e in inc0 if (e.get('file') or e.get('key') or '') in (
+        '一-02', '二-02', '二-03', '二-04', '二-05')]
+    check(not any(e.get('level') == 'block' for e in inc0) and not opt_inc,
+          'verify does not hard-block optional not-created',
+          'inc=%s' % inc0[:3], failures)
 
     print('\n-- anchors + diff_parts (media / no lost parts)')
     kg_doc = book / kg

@@ -31,6 +31,7 @@ REPO = BASE.parent
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
+from lib.inclusion import is_required  # noqa: E402
 from lib.numbering import parse_seq  # noqa: E402
 from lib.project_store import ProjectStoreError, read_project  # noqa: E402
 
@@ -218,6 +219,36 @@ def check_required(project: dict) -> list:
             'file': 'project.json', 'part': '-', 'key': 'contractNo', 'loc': 'contractNo',
             'reason': '必填缺失：合同编号（有条件）', 'level': 'block',
         })
+    return errors
+
+
+def check_inclusion_gaps(project: dict) -> list:
+    """Optional not-created is not a deficiency. Required not-created is warn, not block."""
+    errors = []
+    snap = (project.get('_catalogSnapshot') or {}).get('items') or []
+    docs = project.get('_docs') or {}
+    trash = set()
+    for t in project.get('_trash') or []:
+        if isinstance(t, dict) and t.get('docId'):
+            trash.add(t['docId'])
+    live_by_item = {}
+    for did, rec in docs.items():
+        if did in trash or not isinstance(rec, dict):
+            continue
+        live_by_item.setdefault(rec.get('itemId'), []).append(did)
+    for it in snap:
+        if not isinstance(it, dict):
+            continue
+        item_id = it.get('itemId') or ''
+        if live_by_item.get(item_id):
+            continue
+        if is_required(it):
+            errors.append({
+                'file': item_id, 'part': '-', 'key': item_id, 'loc': 'inclusion',
+                'reason': '必选未生成：%s' % (it.get('name') or item_id),
+                'level': 'warn',
+            })
+        # 可选未创建：不是缺项，不报
     return errors
 
 
@@ -455,6 +486,7 @@ def main() -> int:
             return exit_env(str(e), a.as_json, 'verify')
         errors.extend(check_required(project))
         errors.extend(check_missing_files(project, a.dir))
+        errors.extend(check_inclusion_gaps(project))
         errors.extend(check_numbering(project))
         errors.extend(check_unit_consistency(a.dir))
         errors.extend(check_amount(project))

@@ -121,15 +121,23 @@ def main() -> int:
     check(len(st.get('docs') or []) == 0, 'create does not auto-generate docs',
           str(len(st.get('docs') or [])), failures)
     opt = next((it for it in (st.get('items') or []) if it.get('itemId') == '一-01'), None)
-    req = next((it for it in (st.get('items') or []) if it.get('itemId') == '二-01'), None)
+    opt_tpl = next((it for it in (st.get('items') or []) if it.get('itemId') == '二-01'), None)
+    req = next((it for it in (st.get('items') or []) if it.get('itemId') == '二-10'), None)
     check(opt and opt.get('inclusion') == 'optional' and opt.get('dot') == 'gray'
           and not (opt.get('docs') or []),
-          'optional empty gray (no instance)',
+          'optional upload empty gray (no instance, not a deficiency)',
           str({k: opt.get(k) for k in ('itemId', 'inclusion', 'dot', 'instanceCount')} if opt else None),
           failures)
-    check(req and req.get('inclusion') == 'required' and not (req.get('docs') or []),
-          'required also 0 copies until booklet / 新建表格',
-          str(req.get('inclusion') if req else None), failures)
+    check(opt_tpl and opt_tpl.get('inclusion') == 'optional' and opt_tpl.get('dot') == 'gray'
+          and not (opt_tpl.get('docs') or []),
+          'optional template 二-01 empty gray',
+          str({k: opt_tpl.get(k) for k in ('itemId', 'inclusion', 'dot')} if opt_tpl else None),
+          failures)
+    check(req and req.get('inclusion') == 'required' and req.get('dot') == 'red'
+          and not (req.get('docs') or []),
+          'required not-created is red (only required missing)',
+          str({k: req.get(k) for k in ('itemId', 'inclusion', 'dot', 'instanceCount')} if req else None),
+          failures)
 
     proc = run([
         sys.executable, str(BRIDGE), '--action', 'generate-item',
@@ -140,9 +148,46 @@ def main() -> int:
     gen = gst.get('generate') or {}
     blank = root / '一、依据分册/1、中标通知书/中标通知书.docx'
     check(proc.returncode == 0 and gen.get('ok') is not False and blank.is_file(),
-          '右键新建表格 creates optional instance',
+          '右键新建表格 creates optional upload instance',
           'exit %d file=%s summary=%s' % (
               proc.returncode, blank.is_file(), gen_payload.get('summary')),
+          failures)
+
+    proc_v = run([
+        sys.executable, str(ENGINE / 'verify_engine.py'),
+        '--dir', str(root), '--project', str(root / 'project.json'),
+        '--level', 'all', '--json',
+    ])
+    pv = last_json(proc_v.stdout) if proc_v.stdout.strip() else {}
+    verrs = pv.get('errors') or []
+    inc = [e for e in verrs if e.get('loc') == 'inclusion']
+    opt_miss = [e for e in inc if (e.get('file') or e.get('key')) in (
+        '二-01', '二-02', '二-03', '二-04', '二-05')]
+    req_warn = [e for e in inc if e.get('level') == 'warn'
+                and (e.get('file') or e.get('key')) == '二-10']
+    inc_blocks = [e for e in inc if e.get('level') == 'block']
+    check(not inc_blocks and not opt_miss,
+          'verify/export must not hard-block optional not-created',
+          'inc-blocks=%s opt-miss=%s' % (inc_blocks[:2], opt_miss[:2]), failures)
+    check(bool(req_warn), 'required not-created is warn, not optional',
+          str(req_warn[:1]), failures)
+
+    proc = run([
+        sys.executable, str(BRIDGE), '--action', 'generate-item',
+        '--project', str(root / 'project.json'), '--item', '二-01', '--json',
+    ])
+    gen2 = last_json(proc.stdout) if proc.stdout.strip() else {}
+    kg = root / '二、过程分册/1、开工报审表/YY-P4-KGBSB-01_开工报审表.docx'
+    opened_after = gen2.get('stats') or {}
+    opt_after = next((it for it in (opened_after.get('items') or [])
+                      if it.get('itemId') == '二-01'), None)
+    check(proc.returncode == 0 and kg.is_file()
+          and opt_after and (opt_after.get('instanceCount') or 0) >= 1
+          and (opt_after.get('docs') or [{}])[0].get('docNo'),
+          '右键新建表格 creates optional 二-01 instance + number',
+          'file=%s no=%s' % (
+              kg.is_file(),
+              ((opt_after or {}).get('docs') or [{}])[0].get('docNo')),
           failures)
 
     # save a field

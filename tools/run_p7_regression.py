@@ -184,10 +184,18 @@ def test_no_secrets(failures: list) -> None:
 
 
 def test_adr21_inclusion(failures: list) -> None:
-    """CI-facing: --item all must not bulk-generate optionals (ADR-21)."""
+    """CI-facing: --item all must not bulk-generate optionals (ADR-21 / Black Widow)."""
     print('\n-- ADR-21 inclusion (required-only booklet)')
-    from lib.inclusion import FIRST_CUT_REQUIRED_IDS  # noqa: WPS433
+    from lib.inclusion import (  # noqa: WPS433
+        FIRST_CUT_OPTIONAL_TEMPLATE_IDS, FIRST_CUT_REQUIRED_COUNT, booklet_items,
+    )
     from lib.project_store import read_project  # noqa: WPS433
+    from lib.rule_engine import load_catalog  # noqa: WPS433
+
+    abbr = SOURCE / 'assets' / 'spec' / '表名缩写字典.csv'
+    alias = SOURCE / 'assets' / 'spec' / '分册别名表.csv'
+    catalog = load_catalog(abbr, alias)
+    required_ids = {it.item_id for it in booklet_items(catalog.items)}
 
     td = Path(tempfile.mkdtemp(prefix='yz-p7-adr21-'))
     try:
@@ -201,23 +209,48 @@ def test_adr21_inclusion(failures: list) -> None:
         check(proc.returncode == 0, 'docgen all exit',
               'exit %s %s' % (proc.returncode, payload.get('summary')), failures)
         created_ids = [r.get('itemId') for r in (payload.get('items') or [])]
-        optional_hit = [i for i in created_ids if i not in FIRST_CUT_REQUIRED_IDS]
-        check(not optional_hit, 'all must not create optionals',
+        optional_hit = [i for i in created_ids if i not in required_ids]
+        check(not optional_hit, 'all must not create optionals (DoD ⑤ FAIL if leak)',
               optional_hit[:8] or 'none', failures)
+        check(all(i not in created_ids for i in FIRST_CUT_OPTIONAL_TEMPLATE_IDS),
+              '二-01～05 optional absent from booklet',
+              [i for i in FIRST_CUT_OPTIONAL_TEMPLATE_IDS if i in created_ids], failures)
+        check('二-10' in created_ids, 'required 施工日志 in booklet',
+              '二-10' in created_ids, failures)
         n_docs = len((read_project(td / 'project.json').get('_docs') or {}))
-        check(n_docs == len(FIRST_CUT_REQUIRED_IDS), 'required-only _docs',
-              '%d (56 would mean optionals leaked)' % n_docs, failures)
+        check(n_docs == len(required_ids) == FIRST_CUT_REQUIRED_COUNT,
+              'required-only _docs',
+              '%d (expect %d; 56 would mean optionals leaked)' % (
+                  n_docs, FIRST_CUT_REQUIRED_COUNT), failures)
         opt_blank = td / '一、依据分册/1、中标通知书/中标通知书.docx'
-        check(not opt_blank.exists(), 'optional file absent after all',
-              str(opt_blank.exists()), failures)
+        opt_kg = td / '二、过程分册/1、开工报审表/YY123-KGBSB-01_开工报审表.docx'
+        req_log = td / '二、过程分册/10、施工日志/YY123-SGRZ-001_施工日志.docx'
+        check(not opt_blank.exists() and not opt_kg.exists(),
+              'optional files absent after all',
+              'upload=%s kg=%s' % (opt_blank.exists(), opt_kg.exists()), failures)
+        check(req_log.is_file(), 'required numbered 施工日志 present',
+              str(req_log.exists()), failures)
+        proc_v = run([
+            sys.executable, str(ENGINE / 'verify_engine.py'),
+            '--dir', str(td), '--project', str(td / 'project.json'),
+            '--level', 'all', '--json',
+        ], timeout=120)
+        pv = last_json(proc_v.stdout) if proc_v.stdout.strip() else {}
+        inc = [e for e in (pv.get('errors') or []) if e.get('loc') == 'inclusion']
+        opt_miss = [e for e in inc
+                    if (e.get('file') or e.get('key')) in FIRST_CUT_OPTIONAL_TEMPLATE_IDS
+                    or (e.get('file') or e.get('key')) == '一-01']
+        check(not any(e.get('level') == 'block' for e in inc) and not opt_miss,
+              'verify does not hard-block optional not-created',
+              'inc=%s' % inc[:3], failures)
         proc2 = run([
             sys.executable, str(ENGINE / 'docgen_engine.py'),
-            '--project', str(td / 'project.json'), '--item', '一-01',
+            '--project', str(td / 'project.json'), '--item', '二-01',
             '--out', str(td), '--json',
         ], timeout=120)
-        check(proc2.returncode == 0 and opt_blank.is_file(),
-              'explicit --item creates optional',
-              'exit %s file=%s' % (proc2.returncode, opt_blank.is_file()), failures)
+        check(proc2.returncode == 0 and opt_kg.is_file(),
+              'explicit --item / 新建表格 creates numbered optional',
+              'exit %s file=%s' % (proc2.returncode, opt_kg.is_file()), failures)
     finally:
         shutil.rmtree(td, ignore_errors=True)
 

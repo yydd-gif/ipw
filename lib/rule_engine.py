@@ -382,7 +382,9 @@ def load_catalog(abbr_path: Path, alias_path: Path | None = None) -> Catalog:
                     seq=seq, name=(row.get('目录项名') or '').strip(),
                     abbr=(row.get('表名缩写') or '').strip(),
                     digits=digits, numbered=numbered,
-                    inclusion=parse_inclusion(row.get(INCLUSION_COL) or '', item_id),
+                    inclusion=parse_inclusion(
+                        row.get(INCLUSION_COL) or '', item_id,
+                        template_status=row.get('模板状态') or ''),
                 )
                 items.append(it)
                 by_id[item_id] = it

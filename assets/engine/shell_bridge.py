@@ -52,6 +52,8 @@ from lib.field_sync import (  # noqa: E402
     apply_all_docs, apply_this_doc, docs_with_field, live_docs,
 )
 from lib.health import run_health  # noqa: E402
+from lib.inclusion import INCLUSION_REQUIRED, is_required  # noqa: E402
+from lib.numbering import NumberingError, apply_action  # noqa: E402
 from lib.project_store import ProjectStoreError, read_project, write_project  # noqa: E402
 from lib.rule_engine import load_catalog  # noqa: E402
 from lib.subtable import TABLE_KEYS, assets_from_project  # noqa: E402
@@ -100,8 +102,10 @@ def _trash_ids(project: dict) -> set:
 def _item_state(item: dict, docs: list, print_states: dict, required_missing: bool) -> dict:
     mine = [d for d in docs if d.get('itemId') == item.get('itemId')]
     printed = any((print_states.get(d['docId']) or {}).get('printed') for d in mine)
+    required = is_required(item)
     if not mine:
-        fill = 'empty'
+        # 可选未创建 = 灰点（不是缺项）；必选未创建 = 红点
+        fill = 'error' if required else 'empty'
     else:
         states = [d.get('fillState') or 'empty' for d in mine]
         if 'error' in states:
@@ -121,6 +125,8 @@ def _item_state(item: dict, docs: list, print_states: dict, required_missing: bo
         'printed': bool(printed),
         'docs': mine,
         'instanceCount': len(mine),
+        'inclusion': item.get('inclusion') or (
+            INCLUSION_REQUIRED if required else 'optional'),
     }
 
 
@@ -161,10 +167,14 @@ def _ledger(catalog_items: list, docs: list, print_states: dict, required_missin
             n_error += 1
         else:
             n_empty += 1
+        mine = st.get('docs') or []
         miss = []
-        if fill == 'error' and required_missing:
+        if fill == 'error' and required_missing and mine:
             miss.append('项目必填')
-        if fill == 'empty' and it.get('hasTemplate'):
+        if fill == 'error' and is_required(it) and not mine:
+            miss.append('必选未生成')
+        # 可选未创建不是缺项
+        if not mine and not is_required(it):
             miss = []
         rows.append({
             'itemId': it.get('itemId'),
@@ -490,7 +500,7 @@ def action_preview(project_path: Path, doc_id: str) -> dict:
 
 
 def action_trash_put(project_path: Path, doc_id: str) -> dict:
-    """Stub-plus: move one doc into _回收站 and index it."""
+    """Move one doc into _回收站. Release numbering without reshuffling (删 02 留 03)."""
     project = read_project(project_path, apply_migration=True)
     rec = (project.get('_docs') or {}).get(doc_id)
     if not rec:
@@ -512,12 +522,21 @@ def action_trash_put(project_path: Path, doc_id: str) -> dict:
     dest = dest_dir / dest_name
     if src.is_file():
         shutil.move(str(src), str(dest))
+    item_id = rec.get('itemId') or ''
+    doc_no = rec.get('docNo') or ''
+    if item_id and (doc_no or doc_id):
+        try:
+            catalog = load_catalog(ABBR_PATH, ALIAS_PATH)
+            apply_action(project, catalog, item_id, 'release',
+                         doc_id=doc_id, no=doc_no)
+        except (NumberingError, ValueError):
+            pass
     entry = {
         'trashId': trash_id,
         'type': 'doc',
-        'itemId': rec.get('itemId') or '',
+        'itemId': item_id,
         'docId': doc_id,
-        'docNo': rec.get('docNo') or '',
+        'docNo': doc_no,
         'originPath': rel,
         'trashPath': str(Path('_回收站') / trash_id / dest_name),
         'deletedAt': _now(),
@@ -526,7 +545,9 @@ def action_trash_put(project_path: Path, doc_id: str) -> dict:
     existing.append(entry)
     project['_trash'] = existing
     write_project(project_path, project, backup=True)
-    return {'trash': entry}
+    payload = _open_payload(project_path)
+    payload['trash'] = entry
+    return payload
 
 
 def _run_engine(script: Path, args: list[str], stage: str, timeout: int = 600) -> dict:
