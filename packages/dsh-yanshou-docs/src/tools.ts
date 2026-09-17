@@ -90,12 +90,13 @@ export function registerTools(ctx: Context, config: Config): void {
       description:
         '按目录清单生成文档：有模板的套模板，无模板的按 mode 三选一' +
         '（template 选一个备用模板 / blank 建空白 / upload 占位等用户传 / skip 跳过）。' +
+        'itemId=all 只生成必选（收录=必选）；可选默认 0 份，须传具体 itemId。' +
         '默认跳过已存在的文档，保护用户的编辑成果。确定性批处理，不调用模型推理。',
       parameters: {
         itemId: {
           type: 'string',
           required: true,
-          description: 'all 或具体 itemId（如 二-01）。映射 --item',
+          description: 'all = 仅必选（ADR-21）；具体 itemId 生成/追加该目录项（新建表格）。映射 --item',
         },
         count: {
           type: 'number',

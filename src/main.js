@@ -214,6 +214,12 @@ ipcMain.handle('booklet', async (_e, projectPath) => {
   return runBridge(['--action', 'booklet', '--project', projectPath]);
 });
 
+ipcMain.handle('generate-item', async (_e, { projectPath, itemId, count }) => {
+  const args = ['--action', 'generate-item', '--project', projectPath, '--item', String(itemId || '')];
+  if (count) args.push('--count', String(count));
+  return runBridge(args);
+});
+
 ipcMain.handle('preview', async (_e, { projectPath, docId }) => {
   return runBridge(['--action', 'preview', '--project', projectPath, '--doc-id', docId]);
 });

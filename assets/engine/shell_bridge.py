@@ -120,6 +120,7 @@ def _item_state(item: dict, docs: list, print_states: dict, required_missing: bo
         'dot': DOT[fill],
         'printed': bool(printed),
         'docs': mine,
+        'instanceCount': len(mine),
     }
 
 
@@ -171,9 +172,12 @@ def _ledger(catalog_items: list, docs: list, print_states: dict, required_missin
             'name': it.get('name'),
             'volume': it.get('volume'),
             'hasTemplate': it.get('hasTemplate'),
+            'inclusion': it.get('inclusion') or 'optional',
+            'inclusionLabel': it.get('inclusionLabel') or '',
             'fillState': fill,
             'dot': st['dot'],
             'printed': st['printed'],
+            'instanceCount': len(mine),
             'missing': miss,
         })
     total = len(catalog_items)
@@ -272,6 +276,11 @@ def _open_payload(project_path: Path) -> dict:
         'editorMode': _editor_mode(),
         'syncCapable': True,
         'ai': ai_status(probe_network=False),
+        'inclusion': {
+            'booklet': 'required-only',
+            'optionalDefaultCopies': 0,
+            'createAction': '新建表格',
+        },
     }
 
 
@@ -581,6 +590,38 @@ def _run_engine(script: Path, args: list[str], stage: str, timeout: int = 600) -
     return payload
 
 
+def action_generate_item(project_path: Path, item_id: str, count: int = 1) -> dict:
+    """右键「新建表格」：按编号引擎为该目录项追加一份实例（可选默认由此创建）。"""
+    item_id = str(item_id or '').strip()
+    if not item_id:
+        raise ValueError('需要 --item')
+    n = int(count or 1)
+    if n < 1:
+        raise ValueError('--count 必须 ≥ 1')
+    root = _root(project_path)
+    gen = _run_engine(
+        ENGINE / 'docgen_engine.py',
+        [
+            '--project', str(project_path),
+            '--item', item_id,
+            '--count', str(n),
+            '--out', str(root),
+            '--json',
+        ],
+        'docgen', timeout=300)
+    payload = _open_payload(project_path)
+    payload['generate'] = {
+        'ok': gen.get('exit') == 0,
+        'summary': gen.get('summary') or '',
+        'stats': gen.get('stats') or {},
+        'items': gen.get('items') or [],
+        'exit': gen.get('exit'),
+    }
+    if gen.get('exit') not in (0,):
+        payload['generateError'] = gen.get('summary') or gen.get('stderr') or '新建表格失败'
+    return payload
+
+
 def action_booklet(project_path: Path) -> dict:
     """datafill → fill (mirror) → docgen → verify. Streams #STAGE / #PROGRESS."""
     root = _root(project_path)
@@ -667,6 +708,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description='shell_bridge · Electron JSON API')
     ap.add_argument('--action', required=False, default='',
                     choices=('create', 'open', 'save-fields', 'booklet',
+                             'generate-item',
                              'mark-printed', 'preview', 'dict', 'trash-put',
                              'trash-list', 'export',
                              'save-assets', 'apply-subtables', 'sync-preview',
@@ -690,6 +732,8 @@ def main() -> int:
     ap.add_argument('--to', dest='date_to', default='')
     ap.add_argument('--text', default='')
     ap.add_argument('--payload', default='')
+    ap.add_argument('--item', default='', help='generate-item 的目录项 itemId')
+    ap.add_argument('--count', type=int, default=1)
     ap.add_argument('--json', action='store_true', dest='as_json')
     a = ap.parse_args()
     if not a.action:
@@ -796,6 +840,14 @@ def main() -> int:
             payload = result_payload(bool(data.get('ok')), 'shell',
                                      data.get('summary') or '', stats=data)
             payload['stages'] = data.get('stages')
+            return emit_result(payload, True)
+
+        if a.action == 'generate-item':
+            data = action_generate_item(pj, a.item, a.count)
+            gen = data.get('generate') or {}
+            ok = bool(gen.get('ok'))
+            summary = gen.get('summary') or data.get('generateError') or '新建表格'
+            payload = result_payload(ok, 'shell', summary, stats=data)
             return emit_result(payload, True)
 
         if a.action == 'trash-put':

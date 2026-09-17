@@ -10,6 +10,7 @@ import hashlib
 from pathlib import Path
 from typing import List, Optional
 
+from lib.inclusion import inclusion_label
 from lib.rule_engine import Catalog, CatalogItem, load_catalog
 
 UPLOAD_TYPE = '上传附件'
@@ -82,6 +83,8 @@ def snapshot_item(item: CatalogItem, templates: Path) -> dict:
         'abbr': item.abbr,
         'docDigits': item.digits,
         'numbered': item.numbered,
+        'inclusion': item.inclusion,
+        'inclusionLabel': inclusion_label(item.inclusion),
     }
 
 

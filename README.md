@@ -2,7 +2,7 @@
 
 给一个工程项目做的**验收资料自动生成与管理系统**。对标「筑业云资料」：
 
-**建一个工程 = 建一个文件夹；点一次「一键成册」= 套完 37 份模板并填好 39 个字段。**
+**建一个工程 = 建一个文件夹；点一次「一键成册」= 只生成必选目录项并填好项目字段。可选表默认 0 份，右键「新建表格」才追加。**
 
 当前进度：**P7 交付 + GenOffice 源码嵌入**（P0 填充回归仍保持 37 份 / 171 处 / 0 残留；P1–P7 保持绿）。编辑内核优先 **嵌入 `vendor/genoffice` 的 `docx-engine`（Apache-2.0 钉死 commit）**：右侧「正文」可改正文/表格文字并写回**工程副本**。`pnpm add @genoffice/docx-engine` 仍是 npm 404（private:true），不再当作产品 V1。嵌入不可用时回退 **E1 表单 + 只读预览**。不是 Word 替代品。发行包内嵌引擎、模板与便携 Python；**dsh 运行时约 420MB，基础包默认不含**。凭据只走 `DEEPSEEK_API_KEY` 环境变量。
 
@@ -56,7 +56,7 @@ FillPlan 写入 `--out`（`sort_keys` 规范化 JSON）。同一输入跑两次�
 ```bash
 python tools/run_p2_regression.py
 
-# 一键成册（56 项：37 套模板 + 19 无模板空白）
+# 一键成册（仅必选：首刀 二-01～05；可选默认 0 份）
 python assets/engine/docgen_engine.py \
   --project work/p2-booklet/project.json --item all --json
 
@@ -69,7 +69,7 @@ python assets/engine/verify_engine.py \
   --dir work/p2-booklet --project work/p2-booklet/project.json --json
 ```
 
-`docgen --item all` 默认跳过已生成的文档（重复点「生成全部」不重复）；`--item 二-01 --count 1` 在已有 01 时追加 02。无模板项三选一：`--mode blank|upload|skip`（默认 `template`，无模板时按 blank 落盘以保证 56 项都生成）。
+`docgen --item all` **只生成必选**（ADR-21）；重复点「生成全部」跳过已有必选、**不会**批量生成可选。`--item 二-01 --count 1` 在已有 01 时追加 02。目录树右键「新建表格」= 对该 item 显式 `--item`。无模板项三选一：`--mode blank|upload|skip`（默认 `template`，无模板时按 blank 落盘）。
 
 填充引擎 v1.0 默认 `--anchor on`：每个已填字段写 `yz_<key>` 书签 + `word/customXml/item1.xml` 台账。`--anchor off` 回到纯替换。缺值仍保留 `{{key}}`；日期不自动填。
 

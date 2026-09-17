@@ -125,16 +125,34 @@ function renderTree() {
     );
     if (collapsed) continue;
     for (const it of vol.items) {
-      const on = it.itemId === state.selectedItemId ? ' on' : '';
+      const on = it.itemId === state.selectedItemId && !state.selectedDocId ? ' on' : '';
       const print = it.printed ? '<span class="badge-print">印</span>' : '';
+      const docs = (it.docs || []).filter((d) => d && (d.exists !== false));
+      const empty = docs.length === 0;
+      const emptyCls = empty ? ' empty-opt' : '';
+      const inc = it.inclusion === 'required' ? '必选' : '可选';
+      const title = empty
+        ? (inc + ' · 尚未创建，右键「新建表格」')
+        : (inc + ' · ' + (it.fillState || 'empty'));
       html.push(
-        '<div class="tn lv2' + on + '" data-item="' + it.itemId + '">' +
+        '<div class="tn lv2' + on + emptyCls + '" data-item="' + it.itemId + '">' +
         '<span class="caret">·</span>' +
         escapeHtml(String(it.seq).padStart(2, '0') + ' ' + it.name) +
         print +
-        '<span class="dot d-' + (it.dot || 'gray') + '" title="' + (it.fillState || 'empty') + '"></span>' +
+        '<span class="dot d-' + (it.dot || 'gray') + '" title="' + escapeHtml(title) + '"></span>' +
         '</div>'
       );
+      for (const doc of docs) {
+        const don = doc.docId === state.selectedDocId ? ' on' : '';
+        const label = doc.docNo || (doc.relPath || '').split('/').pop() || doc.docId;
+        html.push(
+          '<div class="tn lv3' + don + '" data-item="' + it.itemId + '" data-doc="' +
+          escapeHtml(doc.docId) + '">' +
+          '<span class="caret">·</span>' +
+          escapeHtml(label) +
+          '</div>'
+        );
+      }
     }
   }
   pane.innerHTML = html.join('');
@@ -344,7 +362,7 @@ function renderLedger() {
 
 function renderJobs() {
   const jobs = state.jobs.length ? state.jobs : [
-    { ico: 'wait', name: '等待一键成册', detail: '点 Ribbon「一键成册」调用 datafill → fill → docgen → verify', time: '' },
+    { ico: 'wait', name: '等待一键成册', detail: '点 Ribbon「一键成册」只生成必选目录项（datafill → fill → docgen → verify）', time: '' },
   ];
   $('mainPane').innerHTML = '<div class="jobs" style="border:none">' + jobs.map((j) => (
     '<div class="job"><span class="j-ico j-' + j.ico + '">' +
@@ -358,7 +376,7 @@ function renderJobs() {
 async function renderPreview() {
   const doc = currentDoc();
   if (!doc) {
-    $('mainPane').innerHTML = '<p class="empty-hint">选一份已生成的文档查看只读预览。<br>未成册的目录项先点「一键成册」。</p>';
+    $('mainPane').innerHTML = '<p class="empty-hint">选一份已生成的文档查看只读预览。<br>可选目录项默认无实例（灰点）；右键「新建表格」创建。一键成册只生成必选。</p>';
     return;
   }
   $('mainPane').innerHTML = '<p class="empty-hint">正在打开预览…</p>';
@@ -415,7 +433,7 @@ function paintEditor(html, note) {
 async function renderEditor() {
   const doc = currentDoc();
   if (!doc) {
-    $('mainPane').innerHTML = '<p class="empty-hint">选一份已生成的文档编辑正文 / 表格文字。<br>未成册的目录项先点「一键成册」。模板资产不可打开写入。</p>';
+    $('mainPane').innerHTML = '<p class="empty-hint">选一份已生成的文档编辑正文 / 表格文字。<br>可选目录项默认无实例；右键「新建表格」创建。模板资产不可打开写入。</p>';
     return;
   }
   if (!state.editor.available) {
@@ -516,14 +534,51 @@ function applyOpen(payload) {
   else renderPreview();
 }
 
-function selectItem(itemId) {
+function selectItem(itemId, docId) {
   state.selectedItemId = itemId;
-  const docs = state.docs.filter((d) => d.itemId === itemId);
-  state.selectedDocId = docs[0] ? docs[0].docId : null;
-  state.view = docs.length ? (state.editor.available ? 'edit' : 'preview') : 'ledger';
+  const docs = state.docs.filter((d) => d.itemId === itemId && d.exists);
+  if (docId && docs.some((d) => d.docId === docId)) {
+    state.selectedDocId = docId;
+  } else {
+    state.selectedDocId = docs[0] ? docs[0].docId : null;
+  }
+  state.view = state.selectedDocId ? (state.editor.available ? 'edit' : 'preview') : 'preview';
   document.querySelectorAll('.etab').forEach((t) => t.classList.toggle('on', t.dataset.view === state.view));
   renderTree();
   showMainView();
+}
+
+function hideTreeMenu() {
+  const menu = $('treeMenu');
+  if (menu) menu.classList.add('hidden');
+}
+
+async function newTable(itemId) {
+  if (!state.projectPath || !itemId) {
+    toast('请先打开工程并选中目录项');
+    return;
+  }
+  hideTreeMenu();
+  toast('正在新建表格…');
+  try {
+    const payload = await api.generateItem({
+      projectPath: state.projectPath,
+      itemId,
+      count: 1,
+    });
+    if (!payload.ok) {
+      toast(payload.summary || '新建表格失败');
+      return;
+    }
+    applyOpen(payload);
+    const gen = (payload.stats && payload.stats.generate) || {};
+    const created = ((gen.items || payload.items) || []).find((x) => x.action === 'created')
+      || ((gen.items || [])[0]);
+    selectItem(itemId, created && created.docId);
+    toast(payload.summary || gen.summary || '已新建表格');
+  } catch (err) {
+    toast('新建表格失败：' + err.message);
+  }
 }
 
 document.querySelectorAll('[data-act]').forEach((el) => {
@@ -552,6 +607,7 @@ document.querySelectorAll('.etab').forEach((el) => {
 });
 
 $('treePane').addEventListener('click', (e) => {
+  hideTreeMenu();
   const vol = e.target.closest('[data-vol]');
   if (vol) {
     const name = decodeURIComponent(vol.dataset.vol);
@@ -560,9 +616,37 @@ $('treePane').addEventListener('click', (e) => {
     renderTree();
     return;
   }
-  const item = e.target.closest('[data-item]');
-  if (item) selectItem(item.dataset.item);
+  const node = e.target.closest('[data-item]');
+  if (node) selectItem(node.dataset.item, node.dataset.doc || '');
 });
+
+$('treePane').addEventListener('contextmenu', (e) => {
+  const node = e.target.closest('[data-item]');
+  if (!node) return;
+  e.preventDefault();
+  const menu = $('treeMenu');
+  if (!menu) return;
+  menu.dataset.item = node.dataset.item;
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+  menu.classList.remove('hidden');
+});
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#treeMenu')) hideTreeMenu();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') hideTreeMenu();
+});
+const treeMenu = $('treeMenu');
+if (treeMenu) {
+  treeMenu.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-ctx]');
+    if (!btn) return;
+    const itemId = treeMenu.dataset.item;
+    if (btn.dataset.ctx === 'new-table') newTable(itemId);
+  });
+}
 
 $('btnSync').addEventListener('click', saveFields);
 $('btnSave').addEventListener('click', () => {
@@ -794,7 +878,7 @@ async function onAct(act) {
     state.view = 'jobs';
     document.querySelectorAll('.etab').forEach((t) => t.classList.toggle('on', t.dataset.view === 'jobs'));
     state.jobs = [
-      { ico: 'run', name: '一键成册 · 运行中', detail: 'datafill → fill → docgen → verify', time: '' },
+      { ico: 'run', name: '一键成册 · 运行中', detail: '仅必选 · datafill → fill → docgen → verify', time: '' },
       { ico: 'wait', name: 'datafill 取值装配', detail: '等待', time: '' },
       { ico: 'wait', name: 'fill 填充', detail: '等待', time: '' },
       { ico: 'wait', name: 'docgen 生成', detail: '等待', time: '' },

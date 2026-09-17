@@ -183,6 +183,45 @@ def test_no_secrets(failures: list) -> None:
         check('sk-' not in t, 'patch has no key', 'ok', failures)
 
 
+def test_adr21_inclusion(failures: list) -> None:
+    """CI-facing: --item all must not bulk-generate optionals (ADR-21)."""
+    print('\n-- ADR-21 inclusion (required-only booklet)')
+    from lib.inclusion import FIRST_CUT_REQUIRED_IDS  # noqa: WPS433
+    from lib.project_store import read_project  # noqa: WPS433
+
+    td = Path(tempfile.mkdtemp(prefix='yz-p7-adr21-'))
+    try:
+        shutil.copy2(SOURCE / 'examples' / 'demo_project.json', td / 'project.json')
+        proc = run([
+            sys.executable, str(ENGINE / 'docgen_engine.py'),
+            '--project', str(td / 'project.json'), '--item', 'all',
+            '--out', str(td), '--json',
+        ], timeout=240)
+        payload = last_json(proc.stdout) if proc.stdout.strip() else {}
+        check(proc.returncode == 0, 'docgen all exit',
+              'exit %s %s' % (proc.returncode, payload.get('summary')), failures)
+        created_ids = [r.get('itemId') for r in (payload.get('items') or [])]
+        optional_hit = [i for i in created_ids if i not in FIRST_CUT_REQUIRED_IDS]
+        check(not optional_hit, 'all must not create optionals',
+              optional_hit[:8] or 'none', failures)
+        n_docs = len((read_project(td / 'project.json').get('_docs') or {}))
+        check(n_docs == len(FIRST_CUT_REQUIRED_IDS), 'required-only _docs',
+              '%d (56 would mean optionals leaked)' % n_docs, failures)
+        opt_blank = td / '一、依据分册/1、中标通知书/中标通知书.docx'
+        check(not opt_blank.exists(), 'optional file absent after all',
+              str(opt_blank.exists()), failures)
+        proc2 = run([
+            sys.executable, str(ENGINE / 'docgen_engine.py'),
+            '--project', str(td / 'project.json'), '--item', '一-01',
+            '--out', str(td), '--json',
+        ], timeout=120)
+        check(proc2.returncode == 0 and opt_blank.is_file(),
+              'explicit --item creates optional',
+              'exit %s file=%s' % (proc2.returncode, opt_blank.is_file()), failures)
+    finally:
+        shutil.rmtree(td, ignore_errors=True)
+
+
 def test_offline_docs_and_gate(failures: list) -> None:
     print('\n-- offline proof (P6 gate still holds)')
     env = os.environ.copy()
@@ -392,6 +431,7 @@ def main() -> int:
     test_pack_config(failures)
     test_no_secrets(failures)
     test_offline_docs_and_gate(failures)
+    test_adr21_inclusion(failures)
     test_runtime_js(failures)
     test_embed_pth(failures)
     test_packaged_engine_imports(failures)

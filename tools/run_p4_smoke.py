@@ -118,6 +118,32 @@ def main() -> int:
     dots = {it.get('dot') for it in st.get('items') or []}
     check(dots <= {'gray', 'blue', 'green', 'red'} and 'gray' in dots,
           'fill dots gray/blue/green/red only', str(dots), failures)
+    check(len(st.get('docs') or []) == 0, 'create does not auto-generate docs',
+          str(len(st.get('docs') or [])), failures)
+    opt = next((it for it in (st.get('items') or []) if it.get('itemId') == '一-01'), None)
+    req = next((it for it in (st.get('items') or []) if it.get('itemId') == '二-01'), None)
+    check(opt and opt.get('inclusion') == 'optional' and opt.get('dot') == 'gray'
+          and not (opt.get('docs') or []),
+          'optional empty gray (no instance)',
+          str({k: opt.get(k) for k in ('itemId', 'inclusion', 'dot', 'instanceCount')} if opt else None),
+          failures)
+    check(req and req.get('inclusion') == 'required' and not (req.get('docs') or []),
+          'required also 0 copies until booklet / 新建表格',
+          str(req.get('inclusion') if req else None), failures)
+
+    proc = run([
+        sys.executable, str(BRIDGE), '--action', 'generate-item',
+        '--project', str(root / 'project.json'), '--item', '一-01', '--json',
+    ])
+    gen_payload = last_json(proc.stdout) if proc.stdout.strip() else {}
+    gst = gen_payload.get('stats') or {}
+    gen = gst.get('generate') or {}
+    blank = root / '一、依据分册/1、中标通知书/中标通知书.docx'
+    check(proc.returncode == 0 and gen.get('ok') is not False and blank.is_file(),
+          '右键新建表格 creates optional instance',
+          'exit %d file=%s summary=%s' % (
+              proc.returncode, blank.is_file(), gen_payload.get('summary')),
+          failures)
 
     # save a field
     proc = run([

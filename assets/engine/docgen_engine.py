@@ -36,6 +36,7 @@ from lib.catalog_build import (  # noqa: E402
     build_catalog_snapshot, find_template, item_folder, numbered_filename,
     plain_filename, upload_filename,
 )
+from lib.inclusion import booklet_items, is_required  # noqa: E402
 from lib.numbering import NumberingError, apply_action, make_doc_id  # noqa: E402
 from lib.project_store import ProjectStoreError, read_project, write_project  # noqa: E402
 from lib.rule_engine import load_catalog, normalize_item_id  # noqa: E402
@@ -214,7 +215,7 @@ def generate_one(item, project, catalog, templates, out_dir, mode, overwrite,
     if has_tpl:
         item_mode = 'template'
     elif mode == 'template':
-        item_mode = 'blank'  # 无模板默认建空白，保证 56 项都落盘
+        item_mode = 'blank'  # 无模板默认建空白（仅对显式 --item / 新建表格）
 
     doc_no = ''
     doc_id = ''
@@ -276,8 +277,9 @@ def generate_one(item, project, catalog, templates, out_dir, mode, overwrite,
 
 
 def select_items(catalog, token: str) -> list:
+    # ADR-21: --item all / 一键成册 = 必选 only；可选靠显式 itemId / 新建表格
     if token == 'all':
-        return list(catalog.items)
+        return booklet_items(catalog.items)
     nid = normalize_item_id(token)
     if nid in catalog.by_id:
         return [catalog.by_id[nid]]
@@ -403,8 +405,15 @@ def main() -> int:
 
     n_docs = len(project.get('_docs') or {})
     ok = not any(e.get('level') == 'block' for e in errors)
-    summary = '生成 %d / 跳过 %d / 覆盖 %d · 在册 %d 份（目录 %d 项）' % (
-        created, skipped, overwritten, n_docs, len(catalog.items))
+    n_required = sum(1 for it in catalog.items if is_required(it))
+    n_optional = len(catalog.items) - n_required
+    if a.item == 'all':
+        summary = '生成 %d / 跳过 %d / 覆盖 %d · 在册 %d 份（必选 %d / 目录 %d，可选 %d 未批量生成）' % (
+            created, skipped, overwritten, n_docs, n_required, len(catalog.items),
+            n_optional)
+    else:
+        summary = '生成 %d / 跳过 %d / 覆盖 %d · 在册 %d 份（目录 %d 项）' % (
+            created, skipped, overwritten, n_docs, len(catalog.items))
     payload = result_payload(
         ok, 'docgen', summary,
         stats={
@@ -416,6 +425,9 @@ def main() -> int:
             'missing': sum(1 for r in records if r.get('状态') == '缺值·保留'),
             'residual': 0,
             'catalog': len(catalog.items),
+            'required': n_required,
+            'optional': n_optional,
+            'selected': len(items),
         },
         items=results,
         errors=errors,

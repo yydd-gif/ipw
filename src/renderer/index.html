@@ -91,7 +91,7 @@
       </div>
       <div class="canvas">
         <div class="page" id="mainPane">
-          <p class="empty-hint">新建或打开一个工程文件夹开始。一键成册会调用 datafill → fill → docgen → verify。</p>
+          <p class="empty-hint">新建或打开一个工程文件夹开始。一键成册只生成必选目录项；可选表默认 0 份，目录树右键「新建表格」追加。</p>
         </div>
         <div class="fields" id="fieldPanel">
           <div class="fp-head">字段面板（39）<button class="collapse" id="btnCollapse">◀ 折叠</button></div>
@@ -228,6 +228,10 @@
       <button class="btn pri" id="btnHealthGo">开始体检</button>
     </div>
   </div>
+</div>
+
+<div id="treeMenu" class="ctx-menu hidden" role="menu">
+  <button type="button" data-ctx="new-table">新建表格</button>
 </div>
 
 <script src="app.js"></script>

@@ -26,6 +26,7 @@ sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(ENGINE))
 
 from lib.catalog_build import find_template, item_folder, numbered_filename  # noqa: E402
+from lib.inclusion import FIRST_CUT_REQUIRED_IDS, booklet_items, is_required  # noqa: E402
 from lib.numbering import (  # noqa: E402
     allocate_one, apply_action, empty_pool, ensure_pool, make_prefix,
     release_one, restore_one,
@@ -45,6 +46,8 @@ ALIAS = SPEC / '分册别名表.csv'
 EXPECT_CATALOG = 56
 EXPECT_TPL = 37
 EXPECT_UPLOAD = 19
+EXPECT_REQUIRED = 5
+EXPECT_OPTIONAL = EXPECT_CATALOG - EXPECT_REQUIRED
 WNS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 
 
@@ -219,6 +222,22 @@ def main() -> int:
           'files=%d catalog-hasTemplate=%d' % (len(tpls), n_tpl), failures)
     check(n_up == EXPECT_UPLOAD, 'upload items',
           '%d (expect %d)' % (n_up, EXPECT_UPLOAD), failures)
+    n_req = sum(1 for it in catalog.items if is_required(it))
+    check(n_req == EXPECT_REQUIRED, 'required inclusion count',
+          '%d (expect %d) %s' % (n_req, EXPECT_REQUIRED,
+                                 [it.item_id for it in catalog.items if is_required(it)]),
+          failures)
+    req_ids = tuple(it.item_id for it in booklet_items(catalog.items))
+    check(req_ids == FIRST_CUT_REQUIRED_IDS, 'first-cut required ids',
+          req_ids, failures)
+    upload_req = [it.item_id for it in catalog.items
+                  if not find_template(TEMPLATES, it) and is_required(it)]
+    check(not upload_req, 'upload items must be optional',
+          str(upload_req) or 'none required', failures)
+    opt_tpl = [it.item_id for it in catalog.items
+               if find_template(TEMPLATES, it) and not is_required(it)]
+    check('二-10' in opt_tpl and '二-01' not in opt_tpl, 'template default optional except 二-01～05',
+          'optional-tpl=%d sample=%s' % (len(opt_tpl), opt_tpl[:3]), failures)
 
     numbering_five_cases(failures)
 
@@ -291,7 +310,7 @@ def main() -> int:
     finally:
         shutil.rmtree(triad, ignore_errors=True)
 
-    print('\n-- docgen booklet')
+    print('\n-- docgen booklet (ADR-21: required only)')
     book = WORK / 'p2-booklet'
     if book.exists():
         shutil.rmtree(book)
@@ -308,26 +327,39 @@ def main() -> int:
           'exit %d %s' % (proc.returncode, payload.get('summary')), failures)
     data = read_project(pj)
     n_docs = len(data.get('_docs') or {})
-    check(n_docs == EXPECT_CATALOG, '_docs count',
-          '%d (expect %d)' % (n_docs, EXPECT_CATALOG), failures)
+    created_ids = [r.get('itemId') for r in (payload.get('items') or [])]
+    optional_in_all = [i for i in created_ids if i not in FIRST_CUT_REQUIRED_IDS]
+    check(not optional_in_all, 'all must not create optionals',
+          optional_in_all[:8], failures)
+    check(n_docs == EXPECT_REQUIRED, '_docs count required-only',
+          '%d (expect %d; generating all 56 optionals must fail)' % (
+              n_docs, EXPECT_REQUIRED), failures)
+    check((payload.get('stats') or {}).get('selected') == EXPECT_REQUIRED,
+          'all selected == required',
+          str((payload.get('stats') or {}).get('selected')), failures)
     snap = (data.get('_catalogSnapshot') or {}).get('items') or []
-    check(len(snap) == EXPECT_CATALOG, 'catalog snapshot',
+    check(len(snap) == EXPECT_CATALOG, 'catalog snapshot still lists all rows',
           '%d items' % len(snap), failures)
+    snap_inc = {it.get('itemId'): it.get('inclusion') for it in snap}
+    check(snap_inc.get('二-01') == 'required' and snap_inc.get('一-01') == 'optional',
+          'snapshot inclusion column',
+          '二-01=%s 一-01=%s' % (snap_inc.get('二-01'), snap_inc.get('一-01')),
+          failures)
 
-    # paths / filenames
+    # paths / filenames — required 开工报审表 must exist; optionals must not
     kg = '二、过程分册/1、开工报审表/YY123-KGBSB-01_开工报审表.docx'
     log = '二、过程分册/10、施工日志/YY123-SGRZ-001_施工日志.docx'
     blank = '一、依据分册/1、中标通知书/中标通知书.docx'
-    check((book / kg).is_file(), 'numbered path', kg, failures)
-    check((book / log).is_file(), '3-digit numbered path', log, failures)
-    check((book / blank).is_file(), 'upload-as-blank path', blank, failures)
-    # 37 templates produced docx under item folders
+    check((book / kg).is_file(), 'numbered path (required)', kg, failures)
+    check(not (book / log).exists(), 'optional 施工日志 not in booklet', log, failures)
+    check(not (book / blank).exists(), 'optional upload not in booklet', blank, failures)
     gen_docx = [p for p in book.rglob('*.docx') if not p.name.startswith('~$')]
-    check(len(gen_docx) == EXPECT_CATALOG, 'generated docx count',
-          '%d (expect %d blanks+templates)' % (len(gen_docx), EXPECT_CATALOG),
+    check(len(gen_docx) == EXPECT_REQUIRED, 'generated docx count required-only',
+          '%d (expect %d required; 56 would mean optionals bulk-generated)' % (
+              len(gen_docx), EXPECT_REQUIRED),
           failures)
 
-    # repeat generate-all: no duplicates
+    # repeat generate-all: skip required that exist; still no optionals
     proc2 = run_cmd([
         sys.executable, str(ENGINE / 'docgen_engine.py'),
         '--project', str(pj), '--item', 'all', '--out', str(book), '--json',
@@ -335,15 +367,15 @@ def main() -> int:
     payload2 = last_json_line(proc2.stdout) if proc2.stdout.strip() else {}
     data2 = read_project(pj)
     gen_docx2 = [p for p in book.rglob('*.docx') if not p.name.startswith('~$')]
-    check(proc2.returncode == 0 and payload2.get('stats', {}).get('skipped') == EXPECT_CATALOG,
-          'repeat generate-all skips',
+    check(proc2.returncode == 0 and payload2.get('stats', {}).get('skipped') == EXPECT_REQUIRED,
+          'repeat generate-all skips required only',
           'skipped=%s created=%s' % (
               (payload2.get('stats') or {}).get('skipped'),
               (payload2.get('stats') or {}).get('created')),
           failures)
-    check(len(data2.get('_docs') or {}) == EXPECT_CATALOG
+    check(len(data2.get('_docs') or {}) == EXPECT_REQUIRED
           and len(gen_docx2) == len(gen_docx),
-          'repeat generate-all no duplicate files',
+          'repeat generate-all no duplicate / no optional leak',
           'docs=%d files=%d' % (len(data2.get('_docs') or {}), len(gen_docx2)),
           failures)
 
@@ -358,6 +390,24 @@ def main() -> int:
     check(proc3.returncode == 0 and kg2.is_file(),
           'append second numbered doc',
           str(p3.get('summary')), failures)
+
+    # 新建表格 equivalent: explicit --item creates an optional
+    proc_opt = run_cmd([
+        sys.executable, str(ENGINE / 'docgen_engine.py'),
+        '--project', str(pj), '--item', '一-01', '--out', str(book), '--json',
+    ])
+    po = last_json_line(proc_opt.stdout) if proc_opt.stdout.strip() else {}
+    check(proc_opt.returncode == 0 and (book / blank).is_file(),
+          'explicit item creates optional (新建表格)',
+          str(po.get('summary')), failures)
+    proc_log = run_cmd([
+        sys.executable, str(ENGINE / 'docgen_engine.py'),
+        '--project', str(pj), '--item', '二-10', '--out', str(book), '--json',
+    ])
+    plog = last_json_line(proc_log.stdout) if proc_log.stdout.strip() else {}
+    check(proc_log.returncode == 0 and (book / log).is_file(),
+          'explicit 施工日志 (3-digit numbered optional)',
+          str(plog.get('summary')), failures)
 
     print('\n-- anchors + diff_parts (media / no lost parts)')
     kg_doc = book / kg
@@ -481,7 +531,7 @@ def main() -> int:
         for f in failures:
             print('  - %s' % f)
         return 1
-    print('RESULT: PASS  P2 DoD  56 项成册 / 编号 5 用例 / 校验定位 / 锚点')
+    print('RESULT: PASS  P2 DoD  必选成册 / 可选新建表格 / 编号 5 用例 / 校验定位 / 锚点')
     print('=' * 68)
     return 0
 

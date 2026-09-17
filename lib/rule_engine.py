@@ -15,6 +15,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from lib.date_window import Window, in_window, parse_iso_date
 from lib.field_dict import FieldDict, FieldSpec, load_field_dict
+from lib.inclusion import INCLUSION_COL, INCLUSION_OPTIONAL, parse_inclusion
 from lib.yaml_lite import YamlLiteError, load_yaml_file
 
 ENGINE_VERSION = '1.0.0'
@@ -83,6 +84,7 @@ class CatalogItem:
     abbr: str
     digits: int
     numbered: bool
+    inclusion: str = INCLUSION_OPTIONAL
 
 
 @dataclass
@@ -380,6 +382,7 @@ def load_catalog(abbr_path: Path, alias_path: Path | None = None) -> Catalog:
                     seq=seq, name=(row.get('目录项名') or '').strip(),
                     abbr=(row.get('表名缩写') or '').strip(),
                     digits=digits, numbered=numbered,
+                    inclusion=parse_inclusion(row.get(INCLUSION_COL) or '', item_id),
                 )
                 items.append(it)
                 by_id[item_id] = it
