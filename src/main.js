@@ -214,6 +214,14 @@ ipcMain.handle('booklet', async (_e, projectPath) => {
   return runBridge(['--action', 'booklet', '--project', projectPath]);
 });
 
+ipcMain.handle('create-item', async (_e, { projectPath, itemId }) => {
+  return runBridge([
+    '--action', 'create-item',
+    '--project', projectPath,
+    '--item', itemId || '',
+  ]);
+});
+
 ipcMain.handle('preview', async (_e, { projectPath, docId }) => {
   return runBridge(['--action', 'preview', '--project', projectPath, '--doc-id', docId]);
 });

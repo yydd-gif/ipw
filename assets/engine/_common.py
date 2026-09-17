@@ -24,6 +24,7 @@ TEMPLATES_BACKUP = BASE / 'templates-backup'
 EXAMPLES = REPO / 'examples'
 DICT_PATH = SPEC / '字段字典.json'
 ABBR_PATH = SPEC / '表名缩写字典.csv'
+CATALOG_DOCX = SPEC / '软件目录.docx'
 RULES_PATH = SPEC / '填数规则.yaml'
 VENDOR = REPO / 'lib' / 'vendor'
 

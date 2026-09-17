@@ -83,6 +83,8 @@ class CatalogItem:
     abbr: str
     digits: int
     numbered: bool
+    importance: str = '普通项'  # 重要项 / 普通项 / 一般项（来自软件目录.docx）
+    required: bool = False      # 重要项才是成册必建；可选表默认无实例
 
 
 @dataclass
@@ -383,7 +385,21 @@ def load_catalog(abbr_path: Path, alias_path: Path | None = None) -> Catalog:
                 )
                 items.append(it)
                 by_id[item_id] = it
-    return Catalog(items=items, by_id=by_id, volume_alias=volume_alias, volume_seq=volume_seq)
+    catalog = Catalog(items=items, by_id=by_id, volume_alias=volume_alias,
+                      volume_seq=volume_seq)
+    _apply_catalog_importance(catalog, abbr_path)
+    return catalog
+
+
+def _apply_catalog_importance(catalog: Catalog, abbr_path: Path) -> None:
+    """Merge 软件目录.docx 重要项/普通项 onto CSV rows. Missing docx → all optional."""
+    from lib.catalog_flags import apply_importance, catalog_docx_path, parse_software_catalog
+    docx = catalog_docx_path(abbr_path)
+    if not docx:
+        return
+    flags = parse_software_catalog(
+        docx, volume_alias=catalog.volume_alias, volume_seq=catalog.volume_seq)
+    apply_importance(catalog.items, flags)
 
 
 def _guess_vol_seq(name: str) -> int:

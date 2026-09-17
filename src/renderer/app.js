@@ -100,7 +100,7 @@ function renderTree() {
   }
   if (state.leftTab === 'trash') {
     if (!state.trash.length) {
-      pane.innerHTML = '<p class="empty-hint">回收站是空的。<br>在目录树右键或选中文档后删除（stub）。</p>';
+      pane.innerHTML = '<p class="empty-hint">回收站是空的。<br>在目录树右键删除实例（编号不重排）。</p>';
       return;
     }
     pane.innerHTML = state.trash.map((t) => (
@@ -125,16 +125,36 @@ function renderTree() {
     );
     if (collapsed) continue;
     for (const it of vol.items) {
-      const on = it.itemId === state.selectedItemId ? ' on' : '';
+      const docs = (it.docs || []).filter((d) => d && d.docId);
+      const empty = !docs.length;
+      const on = it.itemId === state.selectedItemId && (docs.length <= 1 || !state.selectedDocId)
+        ? ' on' : '';
       const print = it.printed ? '<span class="badge-print">印</span>' : '';
+      const req = !!it.required;
+      const mark = req
+        ? '<span class="badge-req">必填</span>'
+        : '<span class="badge-opt">可选</span>';
       html.push(
-        '<div class="tn lv2' + on + '" data-item="' + it.itemId + '">' +
-        '<span class="caret">·</span>' +
+        '<div class="tn lv2' + on + (empty ? ' tn-empty' : '') +
+        '" data-item="' + it.itemId + '" data-kind="catalog">' +
+        '<span class="caret">' + (docs.length > 1 ? '·' : '·') + '</span>' +
         escapeHtml(String(it.seq).padStart(2, '0') + ' ' + it.name) +
-        print +
-        '<span class="dot d-' + (it.dot || 'gray') + '" title="' + (it.fillState || 'empty') + '"></span>' +
-        '</div>'
+        mark + print +
+        '<span class="dot d-' + (it.dot || 'gray') + '" title="' +
+        (empty ? (req ? '必填 · 尚未建表' : '可选 · 尚未建表') : (it.fillState || 'empty')) +
+        '"></span></div>'
       );
+      if (docs.length > 1) {
+        for (const d of docs) {
+          const don = d.docId === state.selectedDocId ? ' on' : '';
+          const label = d.docNo || (d.relPath || '').split('/').pop() || d.docId;
+          html.push(
+            '<div class="tn lv3' + don + '" data-item="' + it.itemId +
+            '" data-doc="' + escapeHtml(d.docId) + '" data-kind="doc">' +
+            '<span class="caret">·</span>' + escapeHtml(label) + '</div>'
+          );
+        }
+      }
     }
   }
   pane.innerHTML = html.join('');
@@ -317,6 +337,7 @@ function renderLedger() {
   const rows = (L.rows || []).map((row) => (
     '<tr data-open="' + row.itemId + '"><td>' + String(row.seq).padStart(2, '0') +
     '</td><td>' + escapeHtml(row.name) + '</td><td>' + escapeHtml(row.volume) +
+    '</td><td>' + (row.required ? '<span class="chip c-amber">必填</span>' : '<span class="chip c-gray">可选</span>') +
     '</td><td>' + fillChip(row.fillState) +
     (row.printed ? ' <span class="chip c-amber">已打印</span>' : '') +
     '</td><td>' + escapeHtml((row.missing || []).join('、') || '—') +
@@ -326,20 +347,22 @@ function renderLedger() {
     '<div class="ledger" style="border:none;padding:0">' +
     '<div class="metric-row">' +
     '<div class="metric"><div class="lab">目录项总数</div><div class="num">' + L.total + '</div></div>' +
-    '<div class="metric"><div class="lab">有模板项</div><div class="num">' + L.withTemplate + '</div></div>' +
+    '<div class="metric"><div class="lab">必填项</div><div class="num">' + (L.required || 0) + '</div></div>' +
     '<div class="metric"><div class="lab">已完成</div><div class="num" style="color:var(--green)">' + L.complete + '</div></div>' +
-    '<div class="metric"><div class="lab">必填缺失</div><div class="num" style="color:var(--red)">' + L.error + '</div></div>' +
+    '<div class="metric"><div class="lab">必填未建</div><div class="num" style="color:var(--amber)">' + (L.requiredEmpty || 0) + '</div></div>' +
     '</div>' +
     '<div class="bar"><i style="width:' + g + '%;background:var(--green)"></i>' +
     '<i style="width:' + b + '%;background:var(--accent)"></i>' +
     '<i style="width:' + r + '%;background:var(--red)"></i></div>' +
-    '<table class="lg-tbl"><tr><th>序号</th><th>目录项名称</th><th>分册</th><th>状态</th><th>缺什么</th><th></th></tr>' +
+    '<table class="lg-tbl"><tr><th>序号</th><th>目录项名称</th><th>分册</th><th>级别</th><th>状态</th><th>缺什么</th><th></th></tr>' +
     rows + '</table></div>';
   $('mainPane').querySelectorAll('[data-open]').forEach((tr) => {
     tr.addEventListener('click', () => selectItem(tr.getAttribute('data-open')));
   });
-  const pct = Math.round((L.complete / tot) * 100);
-  $('sbDone').textContent = '本册完成度 ' + pct + '%';
+  const req = L.required || 0;
+  const reqEmpty = L.requiredEmpty || 0;
+  const pct = req ? Math.round(((req - reqEmpty) / req) * 100) : 0;
+  $('sbDone').textContent = '必填完成度 ' + pct + '%';
 }
 
 function renderJobs() {
@@ -358,7 +381,7 @@ function renderJobs() {
 async function renderPreview() {
   const doc = currentDoc();
   if (!doc) {
-    $('mainPane').innerHTML = '<p class="empty-hint">选一份已生成的文档查看只读预览。<br>未成册的目录项先点「一键成册」。</p>';
+    $('mainPane').innerHTML = '<p class="empty-hint">选一份<strong>已生成</strong>的文档查看只读预览。<br>空的可选行不会自动建表：右键「新建表格」。必填项可点「一键成册」。</p>';
     return;
   }
   $('mainPane').innerHTML = '<p class="empty-hint">正在打开预览…</p>';
@@ -415,7 +438,7 @@ function paintEditor(html, note) {
 async function renderEditor() {
   const doc = currentDoc();
   if (!doc) {
-    $('mainPane').innerHTML = '<p class="empty-hint">选一份已生成的文档编辑正文 / 表格文字。<br>未成册的目录项先点「一键成册」。模板资产不可打开写入。</p>';
+    $('mainPane').innerHTML = '<p class="empty-hint">选一份<strong>已生成</strong>的文档编辑正文 / 表格文字。<br>空的可选行不会自动建表：右键「新建表格」。模板资产不可打开写入。</p>';
     return;
   }
   if (!state.editor.available) {
@@ -516,11 +539,19 @@ function applyOpen(payload) {
   else renderPreview();
 }
 
-function selectItem(itemId) {
+function selectItem(itemId, docId) {
   state.selectedItemId = itemId;
-  const docs = state.docs.filter((d) => d.itemId === itemId);
-  state.selectedDocId = docs[0] ? docs[0].docId : null;
-  state.view = docs.length ? (state.editor.available ? 'edit' : 'preview') : 'ledger';
+  const docs = state.docs.filter((d) => d.itemId === itemId && d.exists);
+  if (docId) {
+    state.selectedDocId = docId;
+  } else {
+    state.selectedDocId = docs[0] ? docs[0].docId : null;
+  }
+  if (!docs.length) {
+    state.view = 'preview';
+  } else {
+    state.view = state.editor.available ? 'edit' : 'preview';
+  }
   document.querySelectorAll('.etab').forEach((t) => t.classList.toggle('on', t.dataset.view === state.view));
   renderTree();
   showMainView();
@@ -561,8 +592,95 @@ $('treePane').addEventListener('click', (e) => {
     return;
   }
   const item = e.target.closest('[data-item]');
-  if (item) selectItem(item.dataset.item);
+  if (item) selectItem(item.dataset.item, item.dataset.doc || null);
 });
+
+function hideCtx() {
+  const el = $('ctxMenu');
+  if (el) el.classList.add('hidden');
+}
+
+$('treePane').addEventListener('contextmenu', (e) => {
+  const item = e.target.closest('[data-item]');
+  if (!item || !state.projectPath) return;
+  e.preventDefault();
+  const menu = $('ctxMenu');
+  if (!menu) return;
+  menu.dataset.item = item.dataset.item;
+  menu.dataset.doc = item.dataset.doc || '';
+  const docs = state.docs.filter((d) => d.itemId === item.dataset.item && d.exists);
+  const hasDoc = !!(item.dataset.doc || docs.length);
+  menu.querySelector('[data-ctx="open"]').disabled = !hasDoc;
+  menu.querySelector('[data-ctx="delete"]').disabled = !hasDoc;
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+  menu.classList.remove('hidden');
+});
+
+document.addEventListener('click', hideCtx);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') hideCtx();
+});
+
+$('ctxMenu').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-ctx]');
+  if (!btn) return;
+  const itemId = $('ctxMenu').dataset.item;
+  const docId = $('ctxMenu').dataset.doc || '';
+  hideCtx();
+  if (btn.dataset.ctx === 'new') createCatalogItem(itemId);
+  else if (btn.dataset.ctx === 'open') openCatalogItem(itemId, docId);
+  else if (btn.dataset.ctx === 'delete') deleteCatalogDoc(itemId, docId);
+});
+
+async function createCatalogItem(itemId) {
+  if (!state.projectPath || !itemId) return;
+  toast('正在新建表格…');
+  try {
+    const payload = await api.createItem({ projectPath: state.projectPath, itemId });
+    if (payload.ok === false && !(payload.stats && payload.stats.create && payload.stats.create.ok)) {
+      toast((payload.stats && payload.stats.create && payload.stats.create.summary) || payload.summary || '新建失败');
+    }
+    applyOpen(payload);
+    const created = ((payload.stats && payload.stats.create && payload.stats.create.items) ||
+      payload.items || []).find((it) => it.action === 'created');
+    selectItem(itemId, created && created.docId);
+    toast((payload.stats && payload.stats.create && payload.stats.create.summary) || payload.summary || '已新建表格');
+  } catch (err) {
+    toast('新建失败：' + err.message);
+  }
+}
+
+function openCatalogItem(itemId, docId) {
+  const docs = state.docs.filter((d) => d.itemId === itemId && d.exists);
+  if (!docs.length) {
+    toast('该项尚未建表。可选表请右键「新建表格」；必填表也可点「一键成册」。');
+    selectItem(itemId);
+    return;
+  }
+  selectItem(itemId, docId || docs[0].docId);
+  state.view = state.editor.available ? 'edit' : 'preview';
+  document.querySelectorAll('.etab').forEach((t) => t.classList.toggle('on', t.dataset.view === state.view));
+  showMainView();
+}
+
+async function deleteCatalogDoc(itemId, docId) {
+  if (!state.projectPath) return;
+  const docs = state.docs.filter((d) => d.itemId === itemId && d.exists);
+  const target = docId ? docs.find((d) => d.docId === docId) : docs[docs.length - 1];
+  if (!target) {
+    toast('没有可删除的实例');
+    return;
+  }
+  try {
+    await api.trashPut({ projectPath: state.projectPath, docId: target.docId });
+    applyOpen(await api.openPath(state.root));
+    selectItem(itemId);
+    toast('已删除到回收站（其余编号不重排）');
+  } catch (err) {
+    toast('删除失败：' + err.message);
+  }
+}
 
 $('btnSync').addEventListener('click', saveFields);
 $('btnSave').addEventListener('click', () => {

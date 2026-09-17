@@ -22,7 +22,7 @@ for _p in (_HERE.parent.parent, _HERE):
         sys.path.insert(0, _s)
 
 from _common import (
-    ABBR_PATH, BASE, DICT_PATH, SPEC, TEMPLATES,
+    ABBR_PATH, BASE, CATALOG_DOCX, DICT_PATH, SPEC, TEMPLATES,
     TemplateProtectionError, assert_not_template_write,
     emit_progress, emit_result, exit_env, exit_param, result_payload,
 )
@@ -36,6 +36,7 @@ from lib.catalog_build import (  # noqa: E402
     build_catalog_snapshot, find_template, item_folder, numbered_filename,
     plain_filename, upload_filename,
 )
+from lib.catalog_flags import item_required  # noqa: E402
 from lib.numbering import NumberingError, apply_action, make_doc_id  # noqa: E402
 from lib.project_store import ProjectStoreError, read_project, write_project  # noqa: E402
 from lib.rule_engine import load_catalog, normalize_item_id  # noqa: E402
@@ -214,7 +215,7 @@ def generate_one(item, project, catalog, templates, out_dir, mode, overwrite,
     if has_tpl:
         item_mode = 'template'
     elif mode == 'template':
-        item_mode = 'blank'  # 无模板默认建空白，保证 56 项都落盘
+        item_mode = 'blank'  # 无模板默认建空白（仅对本次要生成的项）
 
     doc_no = ''
     doc_id = ''
@@ -290,6 +291,29 @@ def select_items(catalog, token: str) -> list:
     raise ValueError('目录项不唯一：%s' % token)
 
 
+def booklet_jobs(catalog, project, token: str, count: int) -> tuple:
+    """--item all: required + already-instanced. Specific item: --count copies.
+
+    Optional catalog rows with no live instance are skipped (not created).
+    """
+    items = select_items(catalog, token)
+    jobs = []
+    skipped_optional = []
+    if token == 'all':
+        for it in items:
+            existing = live_docs(project, it.item_id)
+            if item_required(it) or existing:
+                jobs.append((it, 1))
+            else:
+                skipped_optional.append({
+                    'itemId': it.item_id, 'action': 'skipped',
+                    'reason': 'optional not selected',
+                })
+    else:
+        jobs = [(items[0], int(count or 1))]
+    return jobs, skipped_optional
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description='docgen_engine · 一键成册 / 单份 / 追加')
     ap.add_argument('--project', type=Path)
@@ -331,28 +355,25 @@ def main() -> int:
     if not snap.get('items'):
         project['_catalogSnapshot'] = build_catalog_snapshot(
             catalog, a.templates,
-            [ABBR_PATH, ALIAS_PATH],
+            [ABBR_PATH, ALIAS_PATH, CATALOG_DOCX],
             snap.get('parsedAt') or _today())
     else:
-        # keep parsedAt; refresh items so hasTemplate is accurate
+        # keep parsedAt; refresh items so hasTemplate / required are accurate
         project['_catalogSnapshot'] = build_catalog_snapshot(
             catalog, a.templates,
-            [ABBR_PATH, ALIAS_PATH],
+            [ABBR_PATH, ALIAS_PATH, CATALOG_DOCX],
             snap.get('parsedAt') or _today())
 
     _data, meta, enabled = load_dict(DICT_PATH)
     plan = compute_fillplan(project)
     records: list = []
-    results = []
     created = skipped = overwritten = 0
     errors = []
 
-    # --item all → 每项 1 份；指定 item → --count 份（追加）
-    jobs = []
-    if a.item == 'all':
-        jobs = [(it, 1) for it in items]
-    else:
-        jobs = [(items[0], int(a.count or 1))]
+    # --item all → 必填 + 已建表；指定 item → --count 份（追加，含可选表）
+    jobs, skipped_optional = booklet_jobs(catalog, project, a.item, a.count)
+    results = list(skipped_optional)
+    skipped = len(skipped_optional)
 
     total = sum(n for _it, n in jobs)
     done = 0
@@ -402,9 +423,12 @@ def main() -> int:
         return exit_env(str(e), a.as_json, 'docgen')
 
     n_docs = len(project.get('_docs') or {})
+    n_required = sum(1 for it in catalog.items if item_required(it))
+    n_optional = len(catalog.items) - n_required
     ok = not any(e.get('level') == 'block' for e in errors)
-    summary = '生成 %d / 跳过 %d / 覆盖 %d · 在册 %d 份（目录 %d 项）' % (
-        created, skipped, overwritten, n_docs, len(catalog.items))
+    summary = '生成 %d / 跳过 %d / 覆盖 %d · 在册 %d 份（必填 %d / 可选 %d / 目录 %d）' % (
+        created, skipped, overwritten, n_docs, n_required, n_optional,
+        len(catalog.items))
     payload = result_payload(
         ok, 'docgen', summary,
         stats={
@@ -412,10 +436,13 @@ def main() -> int:
             'created': created,
             'skipped': skipped,
             'overwritten': overwritten,
+            'optionalSkipped': len(skipped_optional),
             'filled': sum(1 for r in records if r.get('状态') == '已填充'),
             'missing': sum(1 for r in records if r.get('状态') == '缺值·保留'),
             'residual': 0,
             'catalog': len(catalog.items),
+            'required': n_required,
+            'optional': n_optional,
         },
         items=results,
         errors=errors,

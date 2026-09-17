@@ -24,7 +24,7 @@ for _p in (_HERE.parent.parent, _HERE):
         sys.path.insert(0, _s)
 
 from _common import (
-    ABBR_PATH, BASE, DICT_PATH, RULES_PATH, SPEC, TEMPLATES,
+    ABBR_PATH, BASE, CATALOG_DOCX, DICT_PATH, RULES_PATH, SPEC, TEMPLATES,
     TemplateProtectionError, assert_not_template_write,
     emit_progress, emit_result, exit_env, exit_param, result_payload,
     work_dir,
@@ -45,6 +45,7 @@ def _editor_mode() -> str:
     except (OSError, json.JSONDecodeError):
         return 'E1'
 from lib.catalog_build import build_catalog_snapshot  # noqa: E402
+from lib.catalog_flags import item_required  # noqa: E402
 from lib.catalog_pages import apply_structure_to_docx  # noqa: E402
 from lib.docx_preview import preview_docx  # noqa: E402
 from lib.field_dict import FieldDictError, load_field_dict  # noqa: E402
@@ -52,6 +53,7 @@ from lib.field_sync import (  # noqa: E402
     apply_all_docs, apply_this_doc, docs_with_field, live_docs,
 )
 from lib.health import run_health  # noqa: E402
+from lib.numbering import NumberingError, apply_action  # noqa: E402
 from lib.project_store import ProjectStoreError, read_project, write_project  # noqa: E402
 from lib.rule_engine import load_catalog  # noqa: E402
 from lib.subtable import TABLE_KEYS, assets_from_project  # noqa: E402
@@ -163,22 +165,30 @@ def _ledger(catalog_items: list, docs: list, print_states: dict, required_missin
         miss = []
         if fill == 'error' and required_missing:
             miss.append('项目必填')
-        if fill == 'empty' and it.get('hasTemplate'):
-            miss = []
+        req = item_required(it)
+        if fill == 'empty' and req:
+            miss.append('尚未建表')
         rows.append({
             'itemId': it.get('itemId'),
             'seq': it.get('seq'),
             'name': it.get('name'),
             'volume': it.get('volume'),
             'hasTemplate': it.get('hasTemplate'),
+            'required': req,
+            'importance': it.get('importance') or ('重要项' if req else '普通项'),
             'fillState': fill,
             'dot': st['dot'],
             'printed': st['printed'],
             'missing': miss,
         })
     total = len(catalog_items)
+    n_required = sum(1 for it in catalog_items if item_required(it))
+    n_req_empty = sum(1 for r in rows if r.get('required') and r.get('fillState') == 'empty')
     return {
         'total': total,
+        'required': n_required,
+        'optional': total - n_required,
+        'requiredEmpty': n_req_empty,
         'withTemplate': n_tpl,
         'complete': n_complete,
         'draft': n_draft,
@@ -191,10 +201,10 @@ def _ledger(catalog_items: list, docs: list, print_states: dict, required_missin
 def _snapshot(project: dict) -> dict:
     catalog = load_catalog(ABBR_PATH, ALIAS_PATH)
     snap = project.get('_catalogSnapshot') or {}
-    if not snap.get('items'):
-        snap = build_catalog_snapshot(
-            catalog, TEMPLATES, [ABBR_PATH, ALIAS_PATH], _today())
-    return snap
+    return build_catalog_snapshot(
+        catalog, TEMPLATES,
+        [ABBR_PATH, ALIAS_PATH, CATALOG_DOCX],
+        snap.get('parsedAt') or _today())
 
 
 def _required_missing(project: dict) -> bool:
@@ -218,6 +228,8 @@ def _open_payload(project_path: Path) -> dict:
         st = _item_state(it, docs, print_states, req_miss)
         rec = dict(it)
         rec.update(st)
+        rec['required'] = item_required(it)
+        rec['importance'] = it.get('importance') or ('重要项' if rec['required'] else '普通项')
         items.append(rec)
         vol = it.get('volume') or ''
         if vol not in vol_map:
@@ -321,7 +333,7 @@ def action_create(folder: Path, fields: dict) -> dict:
         if spec.key in fields and fields[spec.key] not in (None,):
             data[spec.key] = fields[spec.key]
     data['_catalogSnapshot'] = build_catalog_snapshot(
-        catalog, TEMPLATES, [ABBR_PATH, ALIAS_PATH], _today())
+        catalog, TEMPLATES, [ABBR_PATH, ALIAS_PATH, CATALOG_DOCX], _today())
     data['_fieldSources'] = {}
     now = _now()
     for k in fields:
@@ -503,6 +515,13 @@ def action_trash_put(project_path: Path, doc_id: str) -> dict:
     dest = dest_dir / dest_name
     if src.is_file():
         shutil.move(str(src), str(dest))
+    if rec.get('docNo') and rec.get('itemId'):
+        try:
+            catalog = load_catalog(ABBR_PATH, ALIAS_PATH)
+            apply_action(project, catalog, rec['itemId'], 'release',
+                         doc_id=doc_id, no=rec.get('docNo') or '')
+        except (NumberingError, ValueError):
+            pass
     entry = {
         'trashId': trash_id,
         'type': 'doc',
@@ -518,6 +537,32 @@ def action_trash_put(project_path: Path, doc_id: str) -> dict:
     project['_trash'] = existing
     write_project(project_path, project, backup=True)
     return {'trash': entry}
+
+
+def action_create_item(project_path: Path, item_token: str, count: int = 1,
+                       mode: str = 'template') -> dict:
+    """Right-click 新建表格: create one instance of a catalog row (required or optional)."""
+    token = (item_token or '').strip()
+    if not token:
+        raise ValueError('新建表格需要 --item')
+    n = int(count or 1)
+    argv = [
+        '--project', str(project_path),
+        '--item', token,
+        '--count', str(n),
+        '--mode', mode or 'template',
+        '--json',
+    ]
+    data = _run_engine(ENGINE / 'docgen_engine.py', argv, 'docgen', timeout=180)
+    payload = _open_payload(project_path)
+    payload['create'] = {
+        'ok': data.get('exit') == 0,
+        'exit': data.get('exit'),
+        'summary': data.get('summary') or '',
+        'stats': data.get('stats') or {},
+        'items': data.get('items') or [],
+    }
+    return payload
 
 
 def _run_engine(script: Path, args: list[str], stage: str, timeout: int = 600) -> dict:
@@ -668,7 +713,7 @@ def main() -> int:
     ap.add_argument('--action', required=False, default='',
                     choices=('create', 'open', 'save-fields', 'booklet',
                              'mark-printed', 'preview', 'dict', 'trash-put',
-                             'trash-list', 'export',
+                             'trash-list', 'export', 'create-item',
                              'save-assets', 'apply-subtables', 'sync-preview',
                              'ai-status', 'ai-extract', 'ai-rewrite',
                              'ai-apply', 'ai-qa', 'aggregate', 'health'))
@@ -676,6 +721,7 @@ def main() -> int:
     ap.add_argument('--dir', type=Path)
     ap.add_argument('--fields', default='')
     ap.add_argument('--doc-id', dest='doc_id', default='')
+    ap.add_argument('--item', default='')
     ap.add_argument('--rel-path', dest='rel_path', default='')
     ap.add_argument('--sync-mode', dest='sync_mode', default='project',
                     choices=('project', 'this', 'all'))
@@ -796,6 +842,17 @@ def main() -> int:
             payload = result_payload(bool(data.get('ok')), 'shell',
                                      data.get('summary') or '', stats=data)
             payload['stages'] = data.get('stages')
+            return emit_result(payload, True)
+
+        if a.action == 'create-item':
+            data = action_create_item(pj, a.item, count=1,
+                                      mode=a.mode if a.mode in (
+                                          'template', 'blank', 'upload', 'skip')
+                                      else 'template')
+            created = (data.get('create') or {})
+            payload = result_payload(
+                bool(created.get('ok', True)), 'shell',
+                created.get('summary') or '已新建表格', stats=data)
             return emit_result(payload, True)
 
         if a.action == 'trash-put':
