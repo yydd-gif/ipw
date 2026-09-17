@@ -177,7 +177,7 @@ def _ledger(catalog_items: list, docs: list, print_states: dict, required_missin
             'fillState': fill,
             'dot': st['dot'],
             'printed': st['printed'],
-            'instanceCount': len(mine),
+            'instanceCount': st.get('instanceCount', len(st.get('docs') or [])),
             'missing': miss,
         })
     total = len(catalog_items)
