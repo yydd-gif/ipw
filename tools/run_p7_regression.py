@@ -17,11 +17,14 @@ DoD（施工交接说明 §6 P7）:
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 TOOLS = Path(__file__).resolve().parent
@@ -147,6 +150,8 @@ def test_pack_config(failures: list) -> None:
     rt = (SOURCE / 'src' / 'runtime.js').read_text(encoding='utf-8')
     check('findPython' in rt and 'python.exe' in rt, 'runtime.js win python',
           'findPython', failures)
+    check("path.join(root, 'assets', 'engine')" in rt,
+          'pythonEnv prepends assets/engine', 'pythonEnv', failures)
 
 
 def test_no_secrets(failures: list) -> None:
@@ -202,6 +207,108 @@ def test_offline_docs_and_gate(failures: list) -> None:
           'pack docs windows targets', 'nsis', failures)
 
 
+def test_embed_pth(failures: list) -> None:
+    print('\n-- embeddable python._pth extras')
+    spec = importlib.util.spec_from_file_location(
+        'fetch_python_runtime', str(SOURCE / 'scripts' / 'fetch_python_runtime.py'))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    tmp = Path(tempfile.mkdtemp(prefix='yz-pth-'))
+    try:
+        pth = tmp / 'python312._pth'
+        pth.write_text('python312.zip\n.\n# import site\n', encoding='utf-8')
+        mod._enable_embed_site(tmp)
+        lines = [ln.strip() for ln in pth.read_text(encoding='utf-8').splitlines()]
+        norm = [ln.replace('/', '\\') for ln in lines]
+        check('import site' in lines, 'uncomment import site', str(lines), failures)
+        check('..\\lib\\vendor' in norm, 'vendor on ._pth', str(norm), failures)
+        check('..\\assets\\engine' in norm, 'engine on ._pth', str(norm), failures)
+        check('..' in norm, 'install root on ._pth', str(norm), failures)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_packaged_engine_imports(failures: list) -> None:
+    """Simulate Windows embeddable isolation: no script dir on sys.path, and
+    PYTHONPATH like the old pythonEnv (install root + vendor only).
+
+    Regular CPython puts the script directory on sys.path so the production
+    bug is invisible on Linux unless we pass -P / -I.
+    """
+    print('\n-- packaged engine import (embeddable isolation)')
+    proj = WORK / 'p7-embed-create'
+    if proj.exists():
+        shutil.rmtree(proj)
+    fields = json.dumps({
+        'projectName': '打包隔离建档',
+        'ownerUnit': '建设单位',
+        'constructionUnit': '施工单位',
+    }, ensure_ascii=False)
+    # Old pythonEnv: root + vendor, *without* assets/engine.
+    stale_pp = os.pathsep.join([str(SOURCE), str(SOURCE / 'lib' / 'vendor')])
+    env = {
+        'PYTHONUTF8': '1',
+        'PYTHONSAFEPATH': '1',
+        'PYTHONPATH': stale_pp,
+        'YANSHOU_ROOT': str(SOURCE),
+        'YANSHOU_WORK': str(WORK / 'p7-embed-work'),
+    }
+    create = run(
+        [sys.executable, '-P', str(ENGINE / 'shell_bridge.py'),
+         '--action', 'create', '--dir', str(proj),
+         '--fields', fields, '--json'],
+        env=env,
+    )
+    combined = (create.stderr or '') + (create.stdout or '')
+    check('No module named' not in combined,
+          'create has no ModuleNotFoundError',
+          (create.stderr or combined)[-300:], failures)
+    check(create.returncode == 0, 'create exit 0 under -P + stale PYTHONPATH',
+          'exit %s %s' % (create.returncode, combined[-300:]), failures)
+    payload = {}
+    if create.returncode == 0:
+        try:
+            payload = last_json(create.stdout)
+        except (ValueError, json.JSONDecodeError) as e:
+            check(False, 'create JSON', str(e), failures)
+    st = payload.get('stats') or {}
+    check(bool(st.get('projectPath')), 'create projectPath',
+          str(st.get('projectPath')), failures)
+    check((proj / 'project.json').is_file(), 'project.json written',
+          str(proj / 'project.json'), failures)
+
+    # -I ignores PYTHONPATH entirely (python._pth isolated mode).
+    opened = run(
+        [sys.executable, '-I', str(ENGINE / 'shell_bridge.py'),
+         '--action', 'open', '--project', str(proj / 'project.json'), '--json'],
+        env=env,
+    )
+    ocombo = (opened.stderr or '') + (opened.stdout or '')
+    check('No module named' not in ocombo,
+          'open -I has no ModuleNotFoundError',
+          (opened.stderr or ocombo)[-300:], failures)
+    check(opened.returncode == 0, 'open exit 0 under python -I',
+          'exit %s %s' % (opened.returncode, ocombo[-300:]), failures)
+
+    scripts = sorted(ENGINE.glob('*_engine.py')) + [ENGINE / 'shell_bridge.py']
+    for script in scripts:
+        src = script.read_text(encoding='utf-8')
+        head, _, _rest = src.partition('from _common import')
+        has_boot = 'Path(__file__).resolve().parent' in head
+        check(has_boot,
+              '%s bootstraps engine dir before _common' % script.name,
+              'present' if has_boot else 'missing sys.path insert', failures)
+    for script in scripts:
+        help_p = run(
+            [sys.executable, '-I', str(script), '--help'],
+            env=env, timeout=60,
+        )
+        text = (help_p.stderr or '') + (help_p.stdout or '')
+        check(help_p.returncode == 0 and 'No module named' not in text,
+              '%s --help under -I' % script.name,
+              'exit %s %s' % (help_p.returncode, text[-200:]), failures)
+
+
 def test_runtime_js(failures: list) -> None:
     print('\n-- src/runtime.js')
     script = r"""
@@ -214,6 +321,10 @@ const py = findPython('/no/such', 'win32', {});
 if (py !== 'python') { console.error('fallback', py); process.exit(1); }
 const env = pythonEnv('/tmp/yz-res', '/tmp/yz-work', { FOO: '1' });
 if (env.YANSHOU_ROOT !== '/tmp/yz-res' || env.YANSHOU_WORK !== '/tmp/yz-work') process.exit(2);
+const parts = String(env.PYTHONPATH || '').split(path.delimiter);
+const engine = path.join('/tmp/yz-res', 'assets', 'engine');
+if (parts[0] !== engine) { console.error('engine-first', env.PYTHONPATH); process.exit(3); }
+if (!parts.includes('/tmp/yz-res')) { console.error('root missing', env.PYTHONPATH); process.exit(4); }
 console.log(JSON.stringify({ ok: true, root, py, pythonpath: env.PYTHONPATH }));
 """
     proc = run(['node', '-e', script], cwd=str(SOURCE))
@@ -240,7 +351,11 @@ def test_pack_layout(pack_root: Path, failures: list) -> None:
     env = {
         'YANSHOU_ROOT': str(pack_root),
         'YANSHOU_WORK': str(WORK / 'p7-pack-work'),
-        'PYTHONPATH': str(pack_root) + os.pathsep + str(pack_root / 'lib' / 'vendor'),
+        'PYTHONPATH': os.pathsep.join([
+            str(pack_root / 'assets' / 'engine'),
+            str(pack_root),
+            str(pack_root / 'lib' / 'vendor'),
+        ]),
     }
     # P0 from packaged extraResources
     p0 = run(
@@ -278,6 +393,8 @@ def main() -> int:
     test_no_secrets(failures)
     test_offline_docs_and_gate(failures)
     test_runtime_js(failures)
+    test_embed_pth(failures)
+    test_packaged_engine_imports(failures)
 
     pack_root = Path(a.pack) if a.pack else None
     if not pack_root:

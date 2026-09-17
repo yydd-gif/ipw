@@ -49,14 +49,20 @@ def _sha256(path: Path) -> str:
 
 
 def _enable_embed_site(root: Path) -> None:
-    """Windows embeddable: allow extra dirs via python*._pth."""
+    """Windows embeddable: allow extra dirs via python*._pth.
+
+    A present ``python*._pth`` implies isolated mode: PYTHONPATH is ignored.
+    Relative paths here are from ``resources/python/`` (python.exe). Engine
+    scripts also insert ``Path(__file__).parent`` themselves so a stale ._pth
+    cannot resurrect ``No module named '_common'``.
+    """
     pth = next(root.glob('python*._pth'), None)
     if pth is None:
         return
     text = pth.read_text(encoding='utf-8', errors='replace')
     lines = [ln.rstrip() for ln in text.splitlines()]
     # Keep the stdlib zip + '.' ; uncomment import site so vendor path works
-    # even if PYTHONPATH is missing. Also add ..\\lib\\vendor relative hint.
+    # even if PYTHONPATH is missing. Also add pack-root relative hints.
     out = []
     seen_site = False
     for ln in lines:
@@ -70,9 +76,12 @@ def _enable_embed_site(root: Path) -> None:
             out.append(ln)
     if not seen_site:
         out.append('import site')
-    extra = '..\\\\lib\\\\vendor'
-    if extra not in out and '../lib/vendor' not in out:
-        out.append('..\\lib\\vendor')
+    extras = ('..\\lib\\vendor', '..\\assets\\engine', '..')
+    existing = {ln.replace('/', '\\') for ln in out}
+    for extra in extras:
+        if extra not in existing:
+            out.append(extra)
+            existing.add(extra)
     pth.write_text('\n'.join(out) + '\n', encoding='utf-8')
 
 

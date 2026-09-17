@@ -40,7 +40,11 @@ function pythonEnv(root, workDir, baseEnv) {
   env.YANSHOU_ROOT = root;
   if (workDir) env.YANSHOU_WORK = workDir;
   const vendor = path.join(root, 'lib', 'vendor');
-  const parts = [root];
+  const engine = path.join(root, 'assets', 'engine');
+  // Engine first: Windows embeddable CPython (python._pth) often ignores
+  // PYTHONPATH and omits the script directory, but non-embed interpreters
+  // still need this so `from _common import ...` resolves.
+  const parts = [engine, root];
   if (fs.existsSync(vendor)) parts.push(vendor);
   const extra = parts.join(path.delimiter);
   env.PYTHONPATH = env.PYTHONPATH ? extra + path.delimiter + env.PYTHONPATH : extra;

@@ -15,6 +15,13 @@ import zipfile
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+# Windows embeddable CPython (python._pth) omits the script dir from sys.path.
+_HERE = Path(__file__).resolve().parent
+for _p in (_HERE.parent.parent, _HERE):
+    _s = str(_p)
+    if _s not in sys.path:
+        sys.path.insert(0, _s)
+
 from _common import (
     BASE, DICT_PATH, emit_progress, emit_result, exit_env, exit_param,
     result_payload, wns_tag,

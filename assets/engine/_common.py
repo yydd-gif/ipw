@@ -28,11 +28,11 @@ RULES_PATH = SPEC / '填数规则.yaml'
 VENDOR = REPO / 'lib' / 'vendor'
 
 # Packaged extraResources put pypdf here; keep importable without system site-packages.
-for _vendor in (VENDOR, REPO / 'vendor'):
-    if _vendor.is_dir() and str(_vendor) not in sys.path:
-        sys.path.insert(0, str(_vendor))
-if str(REPO) not in sys.path:
-    sys.path.insert(0, str(REPO))
+# ENGINE_DIR first so sibling engines (`fill_engine`, …) resolve even when the
+# interpreter omitted the script directory (Windows embeddable python._pth).
+for _p in (VENDOR, REPO / 'vendor', REPO, ENGINE_DIR):
+    if _p.is_dir() and str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
 
 def work_dir() -> Path:
