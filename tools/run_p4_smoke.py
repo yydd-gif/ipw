@@ -142,7 +142,49 @@ def main() -> int:
     check(data.get('buildSite') == '岳阳市测试地点', 'field persisted',
           str(data.get('buildSite')), failures)
 
+    print('\n-- on-demand create-item (GUI 新建表格)')
+    proc = run([
+        sys.executable, str(BRIDGE), '--action', 'create-item',
+        '--project', str(root / 'project.json'), '--item', '二-05', '--json',
+    ])
+    check(proc.returncode == 0, 'create-item exit',
+          'exit %d %s' % (proc.returncode, (proc.stderr or '')[-200:]), failures)
+    created_item = last_json(proc.stdout) if proc.returncode == 0 else {}
+    st2 = created_item.get('stats') or {}
+    kgl = next((it for it in (st2.get('items') or []) if it.get('itemId') == '二-05'), None)
+    kgb = next((it for it in (st2.get('items') or []) if it.get('itemId') == '二-01'), None)
+    kgl_docs = [d for d in ((kgl or {}).get('docs') or []) if d.get('exists')]
+    check(kgl and kgl_docs and (root / kgl_docs[0]['relPath']).is_file(),
+          '新建表格 adds one 工程开工令 instance',
+          str(kgl_docs[:1]), failures)
+    check(not [d for d in ((kgb or {}).get('docs') or []) if d.get('exists')],
+          'create-item does not invent other optionals',
+          str((kgb or {}).get('docs')), failures)
+    proc = run([
+        sys.executable, str(BRIDGE), '--action', 'booklet',
+        '--project', str(root / 'project.json'), '--json',
+    ], timeout=180)
+    check(proc.returncode == 0, 'booklet after optional create',
+          'exit %d' % proc.returncode, failures)
+    proc = run([
+        sys.executable, str(BRIDGE), '--action', 'open',
+        '--project', str(root / 'project.json'), '--json',
+    ])
+    after = last_json(proc.stdout) if proc.returncode == 0 else {}
+    st3 = after.get('stats') or {}
+    kgl2 = next((it for it in (st3.get('items') or []) if it.get('itemId') == '二-05'), None)
+    check(len([d for d in ((kgl2 or {}).get('docs') or []) if d.get('exists')]) == 1,
+          'booklet does not mass-create extra 开工令',
+          str((kgl2 or {}).get('docs')), failures)
+    n_req = sum(1 for it in (st3.get('items') or []) if it.get('required'))
+    n_with = sum(1 for it in (st3.get('items') or [])
+                 if any(d.get('exists') for d in (it.get('docs') or [])))
+    check(n_with == n_req + 1,
+          'booklet instances = required + preselected optional',
+          'with=%d required=%d' % (n_with, n_req), failures)
+
     # print state: need a docId — register a fake one then mark
+    data = read_project(root / 'project.json')
     data['_docs']['D-SMOKE-01'] = {
         'itemId': '二-01',
         'relPath': 'missing.docx',
