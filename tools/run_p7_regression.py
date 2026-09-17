@@ -294,9 +294,10 @@ def test_packaged_engine_imports(failures: list) -> None:
     for script in scripts:
         src = script.read_text(encoding='utf-8')
         head, _, _rest = src.partition('from _common import')
-        check('Path(__file__).resolve().parent' in head,
+        has_boot = 'Path(__file__).resolve().parent' in head
+        check(has_boot,
               '%s bootstraps engine dir before _common' % script.name,
-              'missing sys.path insert', failures)
+              'present' if has_boot else 'missing sys.path insert', failures)
     for script in scripts:
         help_p = run(
             [sys.executable, '-I', str(script), '--help'],
