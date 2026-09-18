@@ -2,7 +2,7 @@
 """目录快照 / 模板定位 / 工程内路径.
 
 清单规模以 `表名缩写字典.csv` 为准（56 = 37 有模板 + 19 上传项）。
-必填/可选以字典「收录」列（`inclusion`）为准，见 lib.catalog_flags。
+`inclusion` / `required` 是字典「收录」列元数据，**不**驱动自动建表（ADR-22）。
 分册名一律走别名表标准名，才能对上 `assets/templates/` 的实际目录。
 """
 from __future__ import annotations

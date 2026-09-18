@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""文档生成引擎 · 一键成册 / 单份 / 追加 / 无模板三选一 / 编号绑定.
+"""文档生成引擎 · 单份 / 追加 / 上传挂入 / 编号绑定.
+
+ADR-22：``--item all`` 不是产品建表路径，空目录项一律不自动创建。
+产品路径：有模板右键「新建表格」；无模板右键「上传」选文件挂入。
 
 规格：数据与规则规格.md §2.7–2.8 / §3.2
-  python assets/engine/docgen_engine.py --project work/proj/project.json --item all --json
-  python assets/engine/docgen_engine.py --project work/proj/project.json --item 二-01 --count 2 --json
+  python assets/engine/docgen_engine.py --project work/proj/project.json --item 二-01 --json
+  python assets/engine/docgen_engine.py --project work/proj/project.json --item 一-01 --mode upload --source scan.pdf --json
 """
 from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -36,7 +40,7 @@ from lib.catalog_build import (  # noqa: E402
     build_catalog_snapshot, find_template, item_folder, numbered_filename,
     plain_filename, upload_filename,
 )
-from lib.catalog_flags import item_required  # noqa: E402
+from lib.catalog_flags import item_required  # noqa: E402  metadata only; never auto-create
 from lib.numbering import NumberingError, apply_action, make_doc_id  # noqa: E402
 from lib.project_store import ProjectStoreError, read_project, write_project  # noqa: E402
 from lib.rule_engine import load_catalog, normalize_item_id  # noqa: E402
@@ -153,6 +157,31 @@ def write_upload_stub(dest: Path, item) -> None:
     }, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 
 
+def upload_dest_name(item, source: Path | None, seq: int) -> str:
+    """Name for an attached file (product 上传) or the CLI stub."""
+    if source is not None:
+        ext = Path(source).suffix or ''
+        if seq > 1:
+            return '%s-%02d%s' % (item.name, seq, ext)
+        return '%s%s' % (item.name, ext)
+    if seq > 1:
+        return '%s-%02d.upload.json' % (item.name, seq)
+    return upload_filename(item.name)
+
+
+def write_upload(dest: Path, item, source: Path | None) -> str:
+    """Copy the user file into the catalog folder. CLI stub only if no source."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if source is not None:
+        src = Path(source)
+        if not src.is_file():
+            raise ValueError('上传源文件不存在：%s' % src)
+        shutil.copy2(src, dest)
+        return 'draft' if dest.suffix.lower() in ('.docx', '.doc') else 'complete'
+    write_upload_stub(dest, item)
+    return 'empty'
+
+
 def write_blank(dest: Path, item, project: dict) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     data = build_blank_docx(
@@ -164,7 +193,8 @@ def write_blank(dest: Path, item, project: dict) -> None:
 
 
 def generate_one(item, project, catalog, templates, out_dir, mode, overwrite,
-                 plan, meta, enabled, records, anchor: str) -> dict:
+                 plan, meta, enabled, records, anchor: str,
+                 source: Path | None = None) -> dict:
     """Create or skip one document instance. Returns action dict."""
     folder = item_folder(item)
     tpl = find_template(templates, item)
@@ -214,8 +244,10 @@ def generate_one(item, project, catalog, templates, out_dir, mode, overwrite,
     item_mode = mode
     if has_tpl:
         item_mode = 'template'
+    elif source is not None:
+        item_mode = 'upload'
     elif mode == 'template':
-        item_mode = 'blank'  # 无模板默认建空白（仅对本次要生成的项）
+        item_mode = 'blank'  # CLI 无模板默认空白；产品路径走 上传 + --source
 
     doc_no = ''
     doc_id = ''
@@ -238,7 +270,7 @@ def generate_one(item, project, catalog, templates, out_dir, mode, overwrite,
     elif item_mode == 'upload':
         seq = next_plain_seq(project, item)
         doc_id = unique_doc_id(project, item, seq)
-        fname = upload_filename(item.name)
+        fname = upload_dest_name(item, source, seq)
     else:
         seq = next_plain_seq(project, item)
         doc_id = unique_doc_id(project, item, seq)
@@ -262,8 +294,7 @@ def generate_one(item, project, catalog, templates, out_dir, mode, overwrite,
                       if r['文件'] == rel_path)
         fill_state = 'draft' if missing else 'complete'
     elif item_mode == 'upload':
-        write_upload_stub(dest, item)
-        fill_state = 'empty'
+        fill_state = write_upload(dest, item, source)
     else:
         write_blank(dest, item, project)
         fill_state = 'draft'
@@ -292,26 +323,28 @@ def select_items(catalog, token: str) -> list:
 
 
 def booklet_jobs(catalog, project, token: str, count: int) -> tuple:
-    """--item all: required + already-instanced. Specific item: --count copies.
+    """--item all is not a product create path (ADR-22).
 
-    Optional catalog rows with no live instance are skipped (not created).
+    Empty form-types are never invented. Already-instanced rows may be
+    skipped (default) or overwritten. Specific ``--item``: ``--count`` copies.
+    ``inclusion`` / required do not drive generation.
     """
     items = select_items(catalog, token)
     jobs = []
-    skipped_optional = []
+    skipped_empty = []
     if token == 'all':
         for it in items:
             existing = live_docs(project, it.item_id)
-            if item_required(it) or existing:
+            if existing:
                 jobs.append((it, 1))
             else:
-                skipped_optional.append({
+                skipped_empty.append({
                     'itemId': it.item_id, 'action': 'skipped',
-                    'reason': 'optional not selected',
+                    'reason': 'empty form-type; not auto-created',
                 })
     else:
         jobs = [(items[0], int(count or 1))]
-    return jobs, skipped_optional
+    return jobs, skipped_empty
 
 
 def main() -> int:
@@ -321,6 +354,7 @@ def main() -> int:
     ap.add_argument('--count', type=int, default=1)
     ap.add_argument('--mode', choices=('template', 'blank', 'upload', 'skip'),
                     default='template')
+    ap.add_argument('--source', type=Path, help='无模板「上传」：要挂入工程的源文件')
     ap.add_argument('--templates', type=Path, default=TEMPLATES)
     ap.add_argument('--out', type=Path, help='输出根目录（默认从 --project 推断）')
     ap.add_argument('--overwrite', action='store_true')
@@ -332,6 +366,8 @@ def main() -> int:
         return exit_param('project.json 不存在：%s' % a.project, a.as_json, 'docgen')
     if int(a.count or 1) < 1:
         return exit_param('--count 必须 ≥ 1', a.as_json, 'docgen')
+    if a.source is not None and not a.source.is_file():
+        return exit_param('上传源文件不存在：%s' % a.source, a.as_json, 'docgen')
 
     out_dir = a.out or a.project.parent
     try:
@@ -370,10 +406,11 @@ def main() -> int:
     created = skipped = overwritten = 0
     errors = []
 
-    # --item all → 必填 + 已建表；指定 item → --count 份（追加，含可选表）
-    jobs, skipped_optional = booklet_jobs(catalog, project, a.item, a.count)
-    results = list(skipped_optional)
-    skipped = len(skipped_optional)
+    # --item all → 不新建空表；指定 item → --count 份（追加）
+    jobs, skipped_empty = booklet_jobs(catalog, project, a.item, a.count)
+    results = list(skipped_empty)
+    skipped = len(skipped_empty)
+    source = None if a.item == 'all' else a.source
 
     total = sum(n for _it, n in jobs)
     done = 0
@@ -391,11 +428,13 @@ def main() -> int:
                         action = _generate_append_or_first(
                             it, project, catalog, a.templates, out_dir, a.mode,
                             ow, plan, meta, enabled, records, n_existing=len(
-                                live_docs(project, it.item_id)))
+                                live_docs(project, it.item_id)),
+                            source=source)
                     else:
                         action = generate_one(
                             it, project, catalog, a.templates, out_dir, a.mode,
-                            ow, plan, meta, enabled, records, anchor='on')
+                            ow, plan, meta, enabled, records, anchor='on',
+                            source=source)
                 except NumberingError as e:
                     errors.append({
                         'file': item_folder(it), 'key': it.item_id,
@@ -425,10 +464,10 @@ def main() -> int:
     n_docs = len(project.get('_docs') or {})
     n_required = sum(1 for it in catalog.items if item_required(it))
     n_optional = len(catalog.items) - n_required
+    n_empty_skip = len(skipped_empty)
     ok = not any(e.get('level') == 'block' for e in errors)
-    summary = '生成 %d / 跳过 %d / 覆盖 %d · 在册 %d 份（必填 %d / 可选 %d / 目录 %d）' % (
-        created, skipped, overwritten, n_docs, n_required, n_optional,
-        len(catalog.items))
+    summary = '生成 %d / 跳过 %d / 覆盖 %d · 在册 %d 份（空表跳过 %d / 目录 %d）' % (
+        created, skipped, overwritten, n_docs, n_empty_skip, len(catalog.items))
     payload = result_payload(
         ok, 'docgen', summary,
         stats={
@@ -436,7 +475,8 @@ def main() -> int:
             'created': created,
             'skipped': skipped,
             'overwritten': overwritten,
-            'optionalSkipped': len(skipped_optional),
+            'emptySkipped': n_empty_skip,
+            'optionalSkipped': n_empty_skip,
             'filled': sum(1 for r in records if r.get('状态') == '已填充'),
             'missing': sum(1 for r in records if r.get('状态') == '缺值·保留'),
             'residual': 0,
@@ -458,20 +498,20 @@ def main() -> int:
 
 def _generate_append_or_first(item, project, catalog, templates, out_dir, mode,
                               overwrite, plan, meta, enabled, records,
-                              n_existing: int) -> dict:
+                              n_existing: int, source: Path | None = None) -> dict:
     """Specific --item: first call creates; subsequent calls append."""
     if n_existing == 0 or overwrite:
         return generate_one(
             item, project, catalog, templates, out_dir, mode, overwrite,
-            plan, meta, enabled, records, anchor='on')
+            plan, meta, enabled, records, anchor='on', source=source)
     # append: pretend no skip by generating a new instance even if live docs exist
     return _force_create(
         item, project, catalog, templates, out_dir, mode,
-        plan, meta, enabled, records)
+        plan, meta, enabled, records, source=source)
 
 
 def _force_create(item, project, catalog, templates, out_dir, mode,
-                  plan, meta, enabled, records) -> dict:
+                  plan, meta, enabled, records, source: Path | None = None) -> dict:
     """Like generate_one but never skips on existing live docs."""
     folder = item_folder(item)
     tpl = find_template(templates, item)
@@ -479,6 +519,8 @@ def _force_create(item, project, catalog, templates, out_dir, mode,
     item_mode = mode if not has_tpl else 'template'
     if has_tpl:
         item_mode = 'template'
+    elif source is not None:
+        item_mode = 'upload'
     elif mode == 'template':
         item_mode = 'blank'
 
@@ -500,9 +542,7 @@ def _force_create(item, project, catalog, templates, out_dir, mode,
     elif item_mode == 'upload':
         seq = next_plain_seq(project, item)
         doc_id = unique_doc_id(project, item, seq)
-        fname = upload_filename(item.name)
-        if seq > 1:
-            fname = '%s-%02d.upload.json' % (item.name, seq)
+        fname = upload_dest_name(item, source, seq)
     else:
         seq = next_plain_seq(project, item)
         doc_id = unique_doc_id(project, item, seq)
@@ -524,8 +564,7 @@ def _force_create(item, project, catalog, templates, out_dir, mode,
                       if r['文件'] == rel_path)
         fill_state = 'draft' if missing else 'complete'
     elif item_mode == 'upload':
-        write_upload_stub(dest, item)
-        fill_state = 'empty'
+        fill_state = write_upload(dest, item, source)
     else:
         write_blank(dest, item, project)
         fill_state = 'draft'

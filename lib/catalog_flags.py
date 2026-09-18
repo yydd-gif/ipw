@@ -1,14 +1,12 @@
 # -*- coding: utf-8 -*-
 """Catalog inclusion (required vs optional) and importance metadata.
 
-Source of truth for booklet generation: dictionary column ``收录`` → field
-``inclusion`` (``required`` / ``optional``). Do **not** derive required from
-软件目录.docx 重要项 / 普通项 / 一般项 — that file has no 必须 field.
+Dictionary column ``收录`` → field ``inclusion`` (``required`` / ``optional``).
+Do **not** derive from 软件目录.docx 重要项 / 普通项 / 一般项.
 
-First-version roster (until ``收录`` is fully populated):
-  - every **upload** item → optional
-  - catalog ids **二-01～二-05** → optional
-  - every other **templated** item → required
+ADR-22: ``inclusion`` is metadata only. It does **not** drive auto-generation,
+empty-dot colour, or verify missing-item gates. New/open projects start with
+zero instances of every form-type.
 """
 from __future__ import annotations
 
@@ -131,7 +129,7 @@ def item_inclusion(item) -> str:
 
 
 def item_required(item) -> bool:
-    """True only when inclusion is required. Missing flag → optional (do not mass-create)."""
+    """True when inclusion is required. Metadata only — does not auto-create."""
     return item_inclusion(item) == INCLUSION_REQUIRED
 
 

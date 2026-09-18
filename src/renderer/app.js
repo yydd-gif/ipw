@@ -130,20 +130,21 @@ function renderTree() {
       const on = it.itemId === state.selectedItemId && (docs.length <= 1 || !state.selectedDocId)
         ? ' on' : '';
       const print = it.printed ? '<span class="badge-print">印</span>' : '';
-      const req = !!it.required;
-      const mark = req
-        ? '<span class="badge-req">必填</span>'
-        : '<span class="badge-opt">可选</span>';
-      const emptyCls = empty ? (req ? ' tn-miss' : ' tn-empty') : '';
-      const dot = it.dot || (empty ? (req ? 'red' : 'gray') : 'gray');
+      const hasTpl = !!it.hasTemplate;
+      const mark = hasTpl
+        ? '<span class="badge-opt">有模板</span>'
+        : '<span class="badge-opt">上传</span>';
+      const emptyCls = empty ? ' tn-empty' : '';
+      const dot = it.dot || 'gray';
       html.push(
         '<div class="tn lv2' + on + emptyCls +
-        '" data-item="' + it.itemId + '" data-kind="catalog">' +
+        '" data-item="' + it.itemId + '" data-kind="catalog" data-template="' +
+        (hasTpl ? '1' : '0') + '">' +
         '<span class="caret">' + (docs.length > 1 ? '·' : '·') + '</span>' +
         escapeHtml(String(it.seq).padStart(2, '0') + ' ' + it.name) +
         mark + print +
         '<span class="dot d-' + dot + '" title="' +
-        (empty ? (req ? '必填 · 尚未建表' : '可选 · 尚未建表') : (it.fillState || 'empty')) +
+        (empty ? '尚未建表（灰点，不是缺项）' : (it.fillState || 'empty')) +
         '"></span></div>'
       );
       if (docs.length > 1) {
@@ -339,7 +340,7 @@ function renderLedger() {
   const rows = (L.rows || []).map((row) => (
     '<tr data-open="' + row.itemId + '"><td>' + String(row.seq).padStart(2, '0') +
     '</td><td>' + escapeHtml(row.name) + '</td><td>' + escapeHtml(row.volume) +
-    '</td><td>' + (row.required ? '<span class="chip c-amber">必填</span>' : '<span class="chip c-gray">可选</span>') +
+    '</td><td>' + (row.hasTemplate ? '<span class="chip c-gray">有模板</span>' : '<span class="chip c-gray">上传</span>') +
     '</td><td>' + fillChip(row.fillState) +
     (row.printed ? ' <span class="chip c-amber">已打印</span>' : '') +
     '</td><td>' + escapeHtml((row.missing || []).join('、') || '—') +
@@ -349,27 +350,26 @@ function renderLedger() {
     '<div class="ledger" style="border:none;padding:0">' +
     '<div class="metric-row">' +
     '<div class="metric"><div class="lab">目录项总数</div><div class="num">' + L.total + '</div></div>' +
-    '<div class="metric"><div class="lab">必填项</div><div class="num">' + (L.required || 0) + '</div></div>' +
+    '<div class="metric"><div class="lab">已建表</div><div class="num">' + (L.instanced || 0) + '</div></div>' +
     '<div class="metric"><div class="lab">已完成</div><div class="num" style="color:var(--green)">' + L.complete + '</div></div>' +
-    '<div class="metric"><div class="lab">必填未建</div><div class="num" style="color:var(--red)">' + (L.requiredEmpty || 0) + '</div></div>' +
+    '<div class="metric"><div class="lab">未建表</div><div class="num" style="color:var(--muted)">' + (L.empty || 0) + '</div></div>' +
     '</div>' +
     '<div class="bar"><i style="width:' + g + '%;background:var(--green)"></i>' +
     '<i style="width:' + b + '%;background:var(--accent)"></i>' +
     '<i style="width:' + r + '%;background:var(--red)"></i></div>' +
-    '<table class="lg-tbl"><tr><th>序号</th><th>目录项名称</th><th>分册</th><th>级别</th><th>状态</th><th>缺什么</th><th></th></tr>' +
+    '<table class="lg-tbl"><tr><th>序号</th><th>目录项名称</th><th>分册</th><th>类型</th><th>状态</th><th>缺什么</th><th></th></tr>' +
     rows + '</table></div>';
   $('mainPane').querySelectorAll('[data-open]').forEach((tr) => {
     tr.addEventListener('click', () => selectItem(tr.getAttribute('data-open')));
   });
-  const req = L.required || 0;
-  const reqEmpty = L.requiredEmpty || 0;
-  const pct = req ? Math.round(((req - reqEmpty) / req) * 100) : 0;
-  $('sbDone').textContent = '必填完成度 ' + pct + '%';
+  const instanced = L.instanced || 0;
+  const pct = tot ? Math.round((instanced / tot) * 100) : 0;
+  $('sbDone').textContent = '已建 ' + instanced + ' / ' + (L.total || 0) + '（' + pct + '%）';
 }
 
 function renderJobs() {
   const jobs = state.jobs.length ? state.jobs : [
-    { ico: 'wait', name: '等待生成必选', detail: '点 Ribbon「生成必选」调用 datafill → fill → docgen → verify', time: '' },
+    { ico: 'wait', name: '按需建表', detail: '有模板右键「新建表格」；无模板右键「上传」。没有一键铺表。', time: '' },
   ];
   $('mainPane').innerHTML = '<div class="jobs" style="border:none">' + jobs.map((j) => (
     '<div class="job"><span class="j-ico j-' + j.ico + '">' +
@@ -383,7 +383,7 @@ function renderJobs() {
 async function renderPreview() {
   const doc = currentDoc();
   if (!doc) {
-    $('mainPane').innerHTML = '<p class="empty-hint">选一份<strong>已生成</strong>的文档查看只读预览。<br>未建表的目录项不会自动建文件：右键「新建表格」。必填项可点「生成必选」。</p>';
+    $('mainPane').innerHTML = '<p class="empty-hint">选一份<strong>已生成</strong>的文档查看只读预览。<br>未建表的目录项不会自动建文件，也不会打开编辑器：有模板右键「新建表格」，无模板右键「上传」。<br>资料专用编辑器，不是完整 Word。</p>';
     return;
   }
   $('mainPane').innerHTML = '<p class="empty-hint">正在打开预览…</p>';
@@ -429,7 +429,7 @@ function paintEditor(html, note) {
   $('mainPane').innerHTML =
     '<div class="go-bar">' +
     '<span>' + escapeHtml(mode) + (note ? ' · ' + escapeHtml(note) : '') + '</span>' +
-    '<span class="go-bar-hint">只写工程副本，永不写 templates</span></div>' +
+    '<span class="go-bar-hint">资料专用编辑器，不是完整 Word · 只写工程副本，永不写 templates</span></div>' +
     (html || '<p class="empty-hint">无正文</p>');
   $('mainPane').querySelectorAll('[data-go-edit]').forEach((el) => {
     el.addEventListener('input', () => setDirty(1));
@@ -440,7 +440,7 @@ function paintEditor(html, note) {
 async function renderEditor() {
   const doc = currentDoc();
   if (!doc) {
-    $('mainPane').innerHTML = '<p class="empty-hint">选一份<strong>已生成</strong>的文档编辑正文 / 表格文字。<br>未建表的目录项不会打开编辑器：右键「新建表格」。模板资产不可打开写入。</p>';
+    $('mainPane').innerHTML = '<p class="empty-hint">选一份<strong>已生成</strong>的文档编辑正文 / 表格文字。<br>未建表不会打开编辑器：有模板右键「新建表格」，无模板右键「上传」。<br>资料专用编辑器，不是完整 Word。模板资产不可打开写入。</p>';
     return;
   }
   if (!state.editor.available) {
@@ -577,7 +577,7 @@ document.querySelectorAll('.etab').forEach((el) => {
   el.addEventListener('click', () => {
     let next = el.dataset.view;
     if ((next === 'edit') && !currentDoc()) {
-      toast('该项尚未建表，无法打开编辑器。右键「新建表格」。');
+      toast('该项尚未建表，无法打开编辑器。有模板请右键「新建表格」，无模板请右键「上传」。');
       next = 'preview';
     }
     state.view = next;
@@ -616,8 +616,14 @@ $('treePane').addEventListener('contextmenu', (e) => {
   if (!menu) return;
   menu.dataset.item = item.dataset.item;
   menu.dataset.doc = item.dataset.doc || '';
+  const rec = state.items.find((it) => it.itemId === item.dataset.item);
+  const hasTpl = rec ? !!rec.hasTemplate : item.dataset.template === '1';
   const docs = state.docs.filter((d) => d.itemId === item.dataset.item && d.exists);
   const hasDoc = !!(item.dataset.doc || docs.length);
+  const btnNew = menu.querySelector('[data-ctx="new"]');
+  const btnUpload = menu.querySelector('[data-ctx="upload"]');
+  if (btnNew) btnNew.classList.toggle('hidden', !hasTpl);
+  if (btnUpload) btnUpload.classList.toggle('hidden', hasTpl);
   menu.querySelector('[data-ctx="open"]').disabled = false;
   menu.querySelector('[data-ctx="delete"]').disabled = !hasDoc;
   menu.style.left = e.clientX + 'px';
@@ -637,6 +643,7 @@ $('ctxMenu').addEventListener('click', (e) => {
   const docId = $('ctxMenu').dataset.doc || '';
   hideCtx();
   if (btn.dataset.ctx === 'new') createCatalogItem(itemId);
+  else if (btn.dataset.ctx === 'upload') uploadCatalogItem(itemId);
   else if (btn.dataset.ctx === 'open') openCatalogItem(itemId, docId);
   else if (btn.dataset.ctx === 'delete') deleteCatalogDoc(itemId, docId);
 });
@@ -659,10 +666,39 @@ async function createCatalogItem(itemId) {
   }
 }
 
+async function uploadCatalogItem(itemId) {
+  if (!state.projectPath || !itemId) return;
+  try {
+    const picked = await api.pickUpload();
+    if (!picked || picked.cancelled || !picked.path) return;
+    toast('正在上传…');
+    const payload = await api.createItem({
+      projectPath: state.projectPath,
+      itemId,
+      sourcePath: picked.path,
+    });
+    if (payload.ok === false && !(payload.stats && payload.stats.create && payload.stats.create.ok)) {
+      toast((payload.stats && payload.stats.create && payload.stats.create.summary) || payload.summary || '上传失败');
+      return;
+    }
+    applyOpen(payload);
+    const created = ((payload.stats && payload.stats.create && payload.stats.create.items) ||
+      payload.items || []).find((it) => it.action === 'created');
+    selectItem(itemId, created && created.docId);
+    toast((payload.stats && payload.stats.create && payload.stats.create.summary) || payload.summary || '已上传');
+  } catch (err) {
+    toast('上传失败：' + err.message);
+  }
+}
+
 function openCatalogItem(itemId, docId) {
   const docs = state.docs.filter((d) => d.itemId === itemId && d.exists);
   if (!docs.length) {
-    toast('该项尚未建表。右键「新建表格」创建实例；必填项也可点「生成必选」。');
+    const rec = state.items.find((it) => it.itemId === itemId);
+    const hint = rec && rec.hasTemplate === false
+      ? '该项尚未建表。右键「上传」选择文件挂入。'
+      : '该项尚未建表。右键「新建表格」创建实例。';
+    toast(hint);
     selectItem(itemId);
     return;
   }
@@ -916,38 +952,7 @@ async function onAct(act) {
     return;
   }
   if (act === 'booklet') {
-    if (!state.projectPath) { toast('请先打开工程'); return; }
-    state.view = 'jobs';
-    document.querySelectorAll('.etab').forEach((t) => t.classList.toggle('on', t.dataset.view === 'jobs'));
-    state.jobs = [
-      { ico: 'run', name: '生成必选 · 运行中', detail: 'datafill → fill → docgen → verify', time: '' },
-      { ico: 'wait', name: 'datafill 取值装配', detail: '等待', time: '' },
-      { ico: 'wait', name: 'fill 填充', detail: '等待', time: '' },
-      { ico: 'wait', name: 'docgen 生成', detail: '等待', time: '' },
-      { ico: 'wait', name: 'verify 校验', detail: '等待', time: '' },
-    ];
-    renderJobs();
-    try {
-      const payload = await api.booklet(state.projectPath);
-      const stages = (payload.stages || (payload.stats && payload.stats.stages) || []);
-      state.jobs = stages.map((s) => ({
-        ico: s.exit === 0 || s.ok ? 'ok' : 'err',
-        name: s.stage,
-        detail: s.summary || ('exit ' + s.exit),
-        time: '',
-      }));
-      state.jobs.unshift({
-        ico: payload.ok ? 'ok' : 'err',
-        name: '生成必选',
-        detail: payload.summary || '',
-        time: '',
-      });
-      renderJobs();
-      applyOpen(await api.openPath(state.root));
-      toast(payload.summary || '成册结束');
-    } catch (err) {
-      toast('成册失败：' + err.message);
-    }
+    toast('已取消「生成必选」。有模板右键「新建表格」，无模板右键「上传」。');
     return;
   }
   if (act === 'print-preview') {
@@ -1177,6 +1182,7 @@ api.onProgress((line) => {
     const ed = state.editor;
     const mode = (f && f.editorMode) || (ed && ed.available ? 'genoffice-embed' : 'E1');
     $('modeBanner').textContent =
+      '资料专用编辑器，不是完整 Word。  ' +
       (ed && ed.available
         ? '编辑内核：嵌入 GenOffice 源码（正文/表格文字可写回工程副本；模板只读）'
         : '编辑内核：E1 表单 + 只读预览（嵌入不可用：' + ((ed && ed.reason) || '未构建') + '）') +

@@ -44,7 +44,7 @@ def _editor_mode() -> str:
         return str(data.get('editorMode') or 'E1')
     except (OSError, json.JSONDecodeError):
         return 'E1'
-from lib.catalog_build import build_catalog_snapshot  # noqa: E402
+from lib.catalog_build import build_catalog_snapshot, find_template  # noqa: E402
 from lib.catalog_flags import item_required  # noqa: E402
 from lib.catalog_pages import apply_structure_to_docx  # noqa: E402
 from lib.docx_preview import preview_docx  # noqa: E402
@@ -55,7 +55,7 @@ from lib.field_sync import (  # noqa: E402
 from lib.health import run_health  # noqa: E402
 from lib.numbering import NumberingError, apply_action  # noqa: E402
 from lib.project_store import ProjectStoreError, read_project, write_project  # noqa: E402
-from lib.rule_engine import load_catalog  # noqa: E402
+from lib.rule_engine import load_catalog, normalize_item_id  # noqa: E402
 from lib.subtable import TABLE_KEYS, assets_from_project  # noqa: E402
 
 ALIAS_PATH = SPEC / '分册别名表.csv'
@@ -102,11 +102,10 @@ def _trash_ids(project: dict) -> set:
 def _item_state(item: dict, docs: list, print_states: dict, required_missing: bool) -> dict:
     mine = [d for d in docs if d.get('itemId') == item.get('itemId')]
     printed = any((print_states.get(d['docId']) or {}).get('printed') for d in mine)
-    req = item_required(item)
     if not mine:
         fill = 'empty'
-        # optional-not-created = gray (not missing); required-not-created = red
-        dot = 'red' if req else 'gray'
+        # ADR-22: empty form-type = gray, never a missing-item / verify failure
+        dot = 'gray'
     else:
         states = [d.get('fillState') or 'empty' for d in mine]
         if 'error' in states:
@@ -170,8 +169,7 @@ def _ledger(catalog_items: list, docs: list, print_states: dict, required_missin
         if fill == 'error' and required_missing:
             miss.append('项目必填')
         req = item_required(it)
-        if fill == 'empty' and req:
-            miss.append('尚未建表')
+        # empty catalog row is not a missing-item gate (ADR-22)
         rows.append({
             'itemId': it.get('itemId'),
             'seq': it.get('seq'),
@@ -188,12 +186,13 @@ def _ledger(catalog_items: list, docs: list, print_states: dict, required_missin
         })
     total = len(catalog_items)
     n_required = sum(1 for it in catalog_items if item_required(it))
-    n_req_empty = sum(1 for r in rows if r.get('required') and r.get('fillState') == 'empty')
+    n_instanced = total - n_empty
     return {
         'total': total,
         'required': n_required,
         'optional': total - n_required,
-        'requiredEmpty': n_req_empty,
+        'requiredEmpty': 0,
+        'instanced': n_instanced,
         'withTemplate': n_tpl,
         'complete': n_complete,
         'draft': n_draft,
@@ -546,11 +545,29 @@ def action_trash_put(project_path: Path, doc_id: str) -> dict:
 
 
 def action_create_item(project_path: Path, item_token: str, count: int = 1,
-                       mode: str = 'template') -> dict:
-    """Right-click 新建表格: create one instance of a catalog row (required or optional)."""
+                       mode: str = 'template', source: str = '') -> dict:
+    """Right-click 新建表格 (templated) or 上传 (no template, source file)."""
     token = (item_token or '').strip()
     if not token:
-        raise ValueError('新建表格需要 --item')
+        raise ValueError('新建表格 / 上传需要 --item')
+    catalog = load_catalog(ABBR_PATH, ALIAS_PATH)
+    nid = normalize_item_id(token)
+    item = catalog.by_id.get(nid)
+    if item is None:
+        hits = [it for it in catalog.items
+                if it.name == token or it.abbr == token or it.item_id == token]
+        if len(hits) != 1:
+            raise ValueError('未知目录项：%s' % token if not hits else '目录项不唯一：%s' % token)
+        item = hits[0]
+    has_tpl = find_template(TEMPLATES, item) is not None
+    src = (source or '').strip()
+    if has_tpl:
+        mode = 'template'
+        src = ''
+    else:
+        if not src:
+            raise ValueError('无模板项请右键「上传」选择要挂入的文件')
+        mode = 'upload'
     n = int(count or 1)
     argv = [
         '--project', str(project_path),
@@ -559,6 +576,8 @@ def action_create_item(project_path: Path, item_token: str, count: int = 1,
         '--mode', mode or 'template',
         '--json',
     ]
+    if src:
+        argv.extend(['--source', src])
     data = _run_engine(ENGINE / 'docgen_engine.py', argv, 'docgen', timeout=180)
     payload = _open_payload(project_path)
     payload['create'] = {
@@ -633,7 +652,7 @@ def _run_engine(script: Path, args: list[str], stage: str, timeout: int = 600) -
 
 
 def action_booklet(project_path: Path) -> dict:
-    """datafill → fill (mirror) → docgen → verify. Streams #STAGE / #PROGRESS."""
+    """Fill/verify existing instances. Does NOT auto-create catalog docs (ADR-22)."""
     root = _root(project_path)
     logs = root / '_logs'
     logs.mkdir(parents=True, exist_ok=True)
@@ -728,6 +747,7 @@ def main() -> int:
     ap.add_argument('--fields', default='')
     ap.add_argument('--doc-id', dest='doc_id', default='')
     ap.add_argument('--item', default='')
+    ap.add_argument('--source', default='', help='无模板上传：源文件路径')
     ap.add_argument('--rel-path', dest='rel_path', default='')
     ap.add_argument('--sync-mode', dest='sync_mode', default='project',
                     choices=('project', 'this', 'all'))
@@ -854,11 +874,12 @@ def main() -> int:
             data = action_create_item(pj, a.item, count=1,
                                       mode=a.mode if a.mode in (
                                           'template', 'blank', 'upload', 'skip')
-                                      else 'template')
+                                      else 'template',
+                                      source=a.source or '')
             created = (data.get('create') or {})
             payload = result_payload(
                 bool(created.get('ok', True)), 'shell',
-                created.get('summary') or '已新建表格', stats=data)
+                created.get('summary') or '已新建', stats=data)
             return emit_result(payload, True)
 
         if a.action == 'trash-put':

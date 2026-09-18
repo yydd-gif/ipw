@@ -214,12 +214,27 @@ ipcMain.handle('booklet', async (_e, projectPath) => {
   return runBridge(['--action', 'booklet', '--project', projectPath]);
 });
 
-ipcMain.handle('create-item', async (_e, { projectPath, itemId }) => {
-  return runBridge([
+ipcMain.handle('create-item', async (_e, { projectPath, itemId, sourcePath }) => {
+  const args = [
     '--action', 'create-item',
     '--project', projectPath,
     '--item', itemId || '',
-  ]);
+  ];
+  if (sourcePath) args.push('--source', sourcePath);
+  return runBridge(args);
+});
+
+ipcMain.handle('pick-upload', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    title: '选择要上传的资料文件',
+    properties: ['openFile'],
+    filters: [
+      { name: '资料文件', extensions: ['docx', 'doc', 'pdf', 'png', 'jpg', 'jpeg', 'xlsx', 'xls', 'zip'] },
+      { name: '所有文件', extensions: ['*'] },
+    ],
+  });
+  if (canceled || !filePaths[0]) return { cancelled: true };
+  return { path: filePaths[0] };
 });
 
 ipcMain.handle('preview', async (_e, { projectPath, docId }) => {
