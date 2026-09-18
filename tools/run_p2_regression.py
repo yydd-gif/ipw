@@ -48,8 +48,8 @@ ALIAS = SPEC / '分册别名表.csv'
 EXPECT_CATALOG = 56
 EXPECT_TPL = 37
 EXPECT_UPLOAD = 19
-EXPECT_REQUIRED = 32  # templated minus 二-01～二-05
-EXPECT_OPTIONAL = 24  # 19 uploads + 5 process optionals
+EXPECT_REQUIRED = 32  # dictionary 收录 metadata only; does not auto-create
+EXPECT_OPTIONAL = 24
 WNS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 
 
@@ -79,6 +79,20 @@ def copy_demo(dest_dir: Path) -> Path:
     pj = dest_dir / 'project.json'
     shutil.copy2(DEMO, pj)
     return pj
+
+
+def catalog_files(root: Path) -> list:
+    skip = {'_logs', '_回收站', '_导出'}
+    out = []
+    for p in root.rglob('*'):
+        if not p.is_file():
+            continue
+        if p.name in ('project.json',) or p.name.startswith('~$'):
+            continue
+        if any(part in skip for part in p.parts):
+            continue
+        out.append(p)
+    return out
 
 
 def xml_parts_ok(docx: Path) -> tuple:
@@ -211,7 +225,7 @@ def numbering_five_cases(failures: list) -> None:
 def main() -> int:
     failures = []
     print('=' * 68)
-    print('P2 regression · 生成与校验闭环')
+    print('P2 regression · 生成与校验闭环（ADR-22 按需建表）')
     print('=' * 68)
 
     catalog = load_catalog(ABBR, ALIAS)
@@ -227,7 +241,7 @@ def main() -> int:
     n_req = sum(1 for it in catalog.items if item_required(it))
     n_opt = len(catalog.items) - n_req
     check(n_req == EXPECT_REQUIRED and n_opt == EXPECT_OPTIONAL,
-          'required vs optional split (收录 roster)',
+          'required vs optional split (收录 metadata only)',
           'required=%d optional=%d' % (n_req, n_opt), failures)
     kgl = catalog.by_id.get('二-05')
     cover = catalog.by_id.get('六-01')
@@ -318,16 +332,22 @@ def main() -> int:
     triad = Path(tempfile.mkdtemp(prefix='yz-p2-triad-'))
     try:
         pj = copy_demo(triad)
-        for item, mode, expect_file, expect_action in (
-            ('一-01', 'upload', '一、依据分册/1、中标通知书/中标通知书.upload.json', 'created'),
-            ('一-02', 'skip', None, 'skipped'),
-            ('一-03', 'blank', '一、依据分册/3、项目招标控制价评审报告及评审清单/项目招标控制价评审报告及评审清单.docx', 'created'),
+        for item, mode, expect_file, expect_action, extra in (
+            ('一-01', 'upload', '一、依据分册/1、中标通知书/中标通知书.txt', 'created',
+             ['--source']),
+            ('一-02', 'skip', None, 'skipped', []),
+            ('一-03', 'blank', '一、依据分册/3、项目招标控制价评审报告及评审清单/项目招标控制价评审报告及评审清单.docx', 'created', []),
         ):
-            proc = run_cmd([
+            argv = [
                 sys.executable, str(ENGINE / 'docgen_engine.py'),
                 '--project', str(pj), '--item', item, '--mode', mode,
                 '--out', str(triad), '--json',
-            ])
+            ]
+            if extra:
+                src = triad / 'scan.txt'
+                src.write_text('中标通知书扫描件\n', encoding='utf-8')
+                argv.extend(['--source', str(src)])
+            proc = run_cmd(argv)
             payload = last_json_line(proc.stdout) if proc.stdout.strip() else {}
             act = ((payload.get('items') or [{}])[0]).get('action')
             check(proc.returncode == 0 and act == expect_action,
@@ -344,11 +364,14 @@ def main() -> int:
     finally:
         shutil.rmtree(triad, ignore_errors=True)
 
-    print('\n-- docgen booklet (required only)')
+    print('\n-- docgen --item all is not a create path (ADR-22)')
     book = WORK / 'p2-booklet'
     if book.exists():
         shutil.rmtree(book)
     pj = copy_demo(book)
+    check(len(catalog_files(book)) == 0, 'open/create demo has zero catalog files',
+          str([str(p.relative_to(book)) for p in catalog_files(book)][:8]) or '0',
+          failures)
     proc = run_cmd([
         sys.executable, str(ENGINE / 'docgen_engine.py'),
         '--project', str(pj), '--item', 'all', '--out', str(book), '--json',
@@ -362,75 +385,81 @@ def main() -> int:
     data = read_project(pj)
     n_docs = len(data.get('_docs') or {})
     st = payload.get('stats') or {}
-    check(n_docs == n_req, '_docs count = required only',
-          '%d (expect required %d, not catalog %d)' % (
-              n_docs, n_req, EXPECT_CATALOG), failures)
-    check(st.get('created') == n_req and st.get('optionalSkipped') == n_opt,
-          'booklet created required, skipped optionals',
-          'created=%s optionalSkipped=%s' % (
-              st.get('created'), st.get('optionalSkipped')), failures)
+    check(n_docs == 0 and len(catalog_files(book)) == 0,
+          '--item all creates zero catalog docs',
+          'docs=%d files=%d created=%s' % (
+              n_docs, len(catalog_files(book)), st.get('created')), failures)
+    check(st.get('created') == 0 and (
+        st.get('emptySkipped') == EXPECT_CATALOG
+        or st.get('optionalSkipped') == EXPECT_CATALOG
+        or st.get('skipped') == EXPECT_CATALOG),
+          '--item all skips every empty form-type',
+          'created=%s emptySkipped=%s skipped=%s' % (
+              st.get('created'), st.get('emptySkipped'), st.get('skipped')),
+          failures)
     snap = (data.get('_catalogSnapshot') or {}).get('items') or []
     check(len(snap) == EXPECT_CATALOG, 'catalog snapshot still lists all rows',
           '%d items' % len(snap), failures)
     snap_req = sum(1 for it in snap if it.get('required'))
-    check(snap_req == n_req, 'snapshot required flags',
+    check(snap_req == n_req, 'snapshot required flags remain metadata',
           '%d (expect %d)' % (snap_req, n_req), failures)
+    snap_incl = {it.get('itemId'): it.get('inclusion') for it in snap}
+    check(snap_incl.get('二-05') == 'optional' and snap_incl.get('六-01') == 'required',
+          'snapshot inclusion flags (metadata only)',
+          '二-05=%s 六-01=%s' % (snap_incl.get('二-05'), snap_incl.get('六-01')),
+          failures)
 
-    # paths / filenames — required numbered / 3-digit / required cover
     kg = '二、过程分册/7、设备开箱验收记录/YY123-SBKXYSJL-01_设备开箱验收记录.docx'
     trial = ('五、初步验收分册（政务信息化项目）/6、试运行记录表/'
              'YY123-SYXJLB-001_试运行记录表.docx')
     cover_path = '六、竣工验收报告/1、封面/封面.docx'
     optional_kgl = '二、过程分册/5、工程开工令'
     optional_bid = '一、依据分册/1、中标通知书'
-    check((book / kg).is_file(), 'required numbered path', kg, failures)
-    check((book / trial).is_file(), 'required 3-digit numbered path', trial, failures)
-    check((book / cover_path).is_file(), 'required templated path', cover_path, failures)
-    kgl_files = list((book / optional_kgl).glob('*')) if (book / optional_kgl).exists() else []
-    check(not kgl_files and '二-05' not in (data.get('_docs') or {}),
-          'optional 工程开工令 not auto-created',
-          'files=%s docs=%s' % (len(kgl_files),
-                                [k for k, r in (data.get('_docs') or {}).items()
-                                 if r.get('itemId') == '二-05']), failures)
-    bid_files = list((book / optional_bid).glob('*')) if (book / optional_bid).exists() else []
-    check(not bid_files, 'upload optional 中标通知书 not auto-created',
-          'files=%s' % len(bid_files), failures)
-    snap_incl = {it.get('itemId'): it.get('inclusion') for it in snap}
-    check(snap_incl.get('二-05') == 'optional' and snap_incl.get('六-01') == 'required',
-          'snapshot inclusion flags',
-          '二-05=%s 六-01=%s' % (snap_incl.get('二-05'), snap_incl.get('六-01')),
+    check(not (book / kg).exists() and not (book / cover_path).exists(),
+          'former required 32 not laid by --item all',
+          'kg=%s cover=%s' % ((book / kg).exists(), (book / cover_path).exists()),
           failures)
-    gen_docx = [p for p in book.rglob('*.docx') if not p.name.startswith('~$')]
-    check(len(gen_docx) == n_req, 'generated docx count = required',
-          '%d (expect %d required, catalog %d)' % (
-              len(gen_docx), n_req, EXPECT_CATALOG), failures)
 
-    # repeat generate-all: no duplicates, still no optionals
+    # product path: explicit --item (新建表格) for templated rows
+    for token in ('二-07', '五-06', '六-01', '二-10'):
+        proc_one = run_cmd([
+            sys.executable, str(ENGINE / 'docgen_engine.py'),
+            '--project', str(pj), '--item', token, '--count', '1',
+            '--out', str(book), '--json',
+        ])
+        pone = last_json_line(proc_one.stdout) if proc_one.stdout.strip() else {}
+        check(proc_one.returncode == 0 and (pone.get('stats') or {}).get('created') == 1,
+              '新建表格 %s creates one' % token,
+              'exit %d created=%s %s' % (
+                  proc_one.returncode, (pone.get('stats') or {}).get('created'),
+                  pone.get('summary')), failures)
+    check((book / kg).is_file(), 'templated numbered path via 新建表格', kg, failures)
+    check((book / trial).is_file(), 'templated 3-digit path via 新建表格', trial, failures)
+    check((book / cover_path).is_file(), 'former required cover via 新建表格', cover_path, failures)
+    kgl_files = list((book / optional_kgl).glob('*')) if (book / optional_kgl).exists() else []
+    check(not kgl_files, '工程开工令 still empty until explicit create',
+          'files=%s' % len(kgl_files), failures)
+    bid_files = list((book / optional_bid).glob('*')) if (book / optional_bid).exists() else []
+    check(not bid_files, 'upload 中标通知书 not auto-created',
+          'files=%s' % len(bid_files), failures)
+
+    n_after_explicit = len(read_project(pj).get('_docs') or {})
     proc2 = run_cmd([
         sys.executable, str(ENGINE / 'docgen_engine.py'),
         '--project', str(pj), '--item', 'all', '--out', str(book), '--json',
     ])
     payload2 = last_json_line(proc2.stdout) if proc2.stdout.strip() else {}
     data2 = read_project(pj)
-    gen_docx2 = [p for p in book.rglob('*.docx') if not p.name.startswith('~$')]
     check(proc2.returncode == 0 and (payload2.get('stats') or {}).get('created') == 0,
-          'repeat generate-all creates nothing',
+          'repeat --item all creates nothing',
           'skipped=%s created=%s' % (
               (payload2.get('stats') or {}).get('skipped'),
               (payload2.get('stats') or {}).get('created')), failures)
-    check((payload2.get('stats') or {}).get('skipped') == EXPECT_CATALOG,
-          'repeat generate-all skips required-existing + optional-unselected',
-          'skipped=%s' % ((payload2.get('stats') or {}).get('skipped')), failures)
-    check(len(data2.get('_docs') or {}) == n_req
-          and len(gen_docx2) == len(gen_docx),
-          'repeat generate-all no duplicate files / no late optionals',
-          'docs=%d files=%d' % (len(data2.get('_docs') or {}), len(gen_docx2)),
+    check(len(data2.get('_docs') or {}) == n_after_explicit,
+          'repeat --item all does not invent catalog docs',
+          'docs=%d (was %d)' % (len(data2.get('_docs') or {}), n_after_explicit),
           failures)
-    check(not list((book / optional_kgl).glob('*')) if (book / optional_kgl).exists() else True,
-          'repeat booklet still has no 工程开工令',
-          optional_kgl, failures)
 
-    # optional right-click equivalent: --item 二-05 creates exactly one
     proc_opt = run_cmd([
         sys.executable, str(ENGINE / 'docgen_engine.py'),
         '--project', str(pj), '--item', '二-05', '--count', '1',
@@ -439,11 +468,10 @@ def main() -> int:
     popt = last_json_line(proc_opt.stdout) if proc_opt.stdout.strip() else {}
     kgl_docx = list((book / optional_kgl).glob('*.docx')) if (book / optional_kgl).exists() else []
     check(proc_opt.returncode == 0 and len(kgl_docx) == 1,
-          'optional 新建表格 creates one file',
+          '新建表格 creates one 工程开工令',
           'exit %d files=%d %s' % (proc_opt.returncode, len(kgl_docx),
                                    popt.get('summary')), failures)
 
-    # append second 开工报审表 (optional numbered) → 01 then 02
     proc3 = run_cmd([
         sys.executable, str(ENGINE / 'docgen_engine.py'),
         '--project', str(pj), '--item', '二-01', '--count', '1',
@@ -452,7 +480,7 @@ def main() -> int:
     p3 = last_json_line(proc3.stdout) if proc3.stdout.strip() else {}
     kg1 = book / '二、过程分册/1、开工报审表/YY123-KGBSB-01_开工报审表.docx'
     check(proc3.returncode == 0 and kg1.is_file(),
-          'optional numbered first instance',
+          'numbered first instance via 新建表格',
           str(p3.get('summary')), failures)
     proc3b = run_cmd([
         sys.executable, str(ENGINE / 'docgen_engine.py'),
@@ -461,7 +489,7 @@ def main() -> int:
     ])
     kg2 = book / '二、过程分册/1、开工报审表/YY123-KGBSB-02_开工报审表.docx'
     check(proc3b.returncode == 0 and kg2.is_file(),
-          'append second numbered doc',
+          'append second numbered doc (03 stays if 02 deleted)',
           str(last_json_line(proc3b.stdout).get('summary') if proc3b.stdout.strip() else ''),
           failures)
 
@@ -481,7 +509,6 @@ def main() -> int:
                   failures)
         tpl = TEMPLATES / '二、过程分册/7、设备开箱验收记录.docx'
         lost = set(part_names(tpl)) - set(part_names(kg_doc))
-        # directory entries may drop; only care about files
         lost_files = {n for n in lost if not n.endswith('/')}
         check(not lost_files, 'no lost parts vs template',
               'ok' if not lost_files else str(sorted(lost_files)[:6]), failures)
@@ -492,7 +519,7 @@ def main() -> int:
 
     log = '二、过程分册/10、施工日志/YY123-SGRZ-001_施工日志.docx'
     check((book / log).is_file(),
-          'required 施工日志 from booklet',
+          '施工日志 from explicit 新建表格',
           log, failures)
     log_doc = book / log
     if log_doc.is_file():
@@ -507,15 +534,15 @@ def main() -> int:
         '--dir', str(book), '--project', str(pj), '--json',
     ])
     pv = last_json_line(proc_v.stdout) if proc_v.stdout.strip() else {}
-    # booklet includes blanks with no leftovers; template docs filled from demo
-    check(proc_v.returncode == 0, 'verify booklet exit',
+    check(proc_v.returncode == 0, 'verify exit with empty form-types present',
           'exit %d %s' % (proc_v.returncode, pv.get('summary')), failures)
     verrs = pv.get('errors') or []
-    opt_hits = [e for e in verrs if any(
+    miss_hits = [e for e in verrs if any(
         name in str(e.get('reason') or '') + str(e.get('file') or '')
-        for name in ('工程开工令', '开工报审表', '中标通知书', 'optional not selected'))]
-    check(not opt_hits, 'verify does not fail on absent optionals',
-          opt_hits[:3] or 'clean', failures)
+        for name in ('尚未建表', '必填目录项', '工程开工令', '中标通知书',
+                     'optional not selected', 'empty form-type'))]
+    check(not miss_hits, 'verify empty gray ≠ missing-item gate',
+          miss_hits[:3] or 'clean', failures)
 
     # plant a leftover and require loc
     planted = WORK / 'p2-leftover'
@@ -597,7 +624,7 @@ def main() -> int:
         for f in failures:
             print('  - %s' % f)
         return 1
-    print('RESULT: PASS  P2 DoD  必填成册 / 可选按需 / 编号 5 用例 / 校验定位 / 锚点')
+    print('RESULT: PASS  P2 DoD  按需建表 / 空表不自动建 / 编号 5 用例 / 校验定位 / 锚点')
     print('=' * 68)
     return 0
 

@@ -11,7 +11,7 @@
     <span class="appdot"></span>
     <span class="title-text" id="titleText">验收资料编辑软件 — 未打开工程</span>
     <span class="dirty hidden" id="dirtyMark">*</span>
-    <span class="winbtns">P7 · 嵌入编辑</span>
+    <span class="winbtns">资料专用编辑器</span>
   </div>
   <div class="banner" id="modeBanner">编辑内核：E1 表单 + 只读预览（V3 保真写回未放行）</div>
   <div class="menubar">
@@ -29,7 +29,6 @@
         <button class="ri" data-act="open"><span class="ri-ico">📂</span><span class="ri-lb">打开</span></button>
         <button class="ri" data-act="save" id="btnSave"><span class="ri-ico">💾</span><span class="ri-lb">保存</span></button>
         <button class="ri" data-act="info"><span class="ri-ico">i</span><span class="ri-lb">工程信息</span></button>
-        <button class="ri" data-act="booklet"><span class="ri-ico">📚</span><span class="ri-lb">生成必选</span></button>
         <button class="ri" data-act="health"><span class="ri-ico">☑</span><span class="ri-lb">模板体检</span></button>
       </div>
       <div class="rg-name">工程</div>
@@ -91,7 +90,7 @@
       </div>
       <div class="canvas">
         <div class="page" id="mainPane">
-          <p class="empty-hint">新建或打开一个工程文件夹开始。「生成必选」只生成<strong>必填</strong>目录项；可选表请在左侧右键「新建表格」。</p>
+          <p class="empty-hint">新建或打开一个工程文件夹开始。目录项默认 0 份；有模板右键「新建表格」，无模板右键「上传」。资料专用编辑器，不是完整 Word。</p>
         </div>
         <div class="fields" id="fieldPanel">
           <div class="fp-head">字段面板（39）<button class="collapse" id="btnCollapse">◀ 折叠</button></div>
@@ -148,8 +147,8 @@
   <div class="dialog">
     <div class="dlg-h">关于</div>
     <div class="dlg-b">
-      <p><b>验收资料的自动生成与管理系统，内建够用的文档编辑能力。</b></p>
-      <p>不是 Office 替代品。工程文档可在右侧「正文」里改正文和表格文字并写回工程副本；模板资产只读。E1 表单 + 只读预览始终可用。凭据只走 DEEPSEEK_API_KEY 环境变量；断网或无 Key 时 AI 入口全部置灰。</p>
+      <p><b>资料专用编辑器，不是完整 Word。</b></p>
+      <p>验收资料的自动生成与管理系统，内建够用的文档编辑能力。不是 Office 替代品。工程文档可在右侧「正文」里改正文和表格文字并写回工程副本；模板资产只读。E1 表单 + 只读预览始终可用。凭据只走 DEEPSEEK_API_KEY 环境变量；断网或无 Key 时 AI 入口全部置灰。</p>
       <p id="aboutFidelity"></p>
     </div>
     <div class="dlg-f"><button class="btn pri" data-close="dlgAbout">关闭</button></div>
@@ -232,6 +231,7 @@
 
 <div id="ctxMenu" class="ctx-menu hidden">
   <button data-ctx="new">新建表格</button>
+  <button data-ctx="upload">上传</button>
   <button data-ctx="open">打开</button>
   <button data-ctx="delete">删除</button>
 </div>

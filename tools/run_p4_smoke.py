@@ -115,35 +115,38 @@ def main() -> int:
     check(st.get('projectPath'), 'create projectPath', str(st.get('projectPath')), failures)
     check(len(st.get('items') or []) >= 50, 'catalog items',
           str(len(st.get('items') or [])), failures)
+    live_docs = [d for it in (st.get('items') or []) for d in (it.get('docs') or []) if d.get('exists')]
+    check(not live_docs, 'create project leaves zero catalog files',
+          'docs=%d' % len(live_docs), failures)
     dots = {it.get('dot') for it in st.get('items') or []}
-    check(dots <= {'gray', 'blue', 'green', 'red'} and 'gray' in dots,
-          'fill dots gray/blue/green/red only', str(dots), failures)
+    check(dots <= {'gray'} and 'gray' in dots,
+          'fresh empty rows are gray only', str(dots), failures)
     by_id = {it.get('itemId'): it for it in st.get('items') or []}
     check(by_id.get('二-05', {}).get('required') is False,
-          '工程开工令 optional in snapshot',
+          '工程开工令 optional in snapshot (metadata)',
           str((by_id.get('二-05') or {}).get('required')), failures)
     check(by_id.get('二-01', {}).get('required') is False,
-          '开工报审表 二-01 optional',
+          '开工报审表 二-01 optional (metadata)',
           str((by_id.get('二-01') or {}).get('required')), failures)
     check(by_id.get('一-01', {}).get('required') is False,
-          'upload 中标通知书 optional',
+          'upload 中标通知书 optional (metadata)',
           str((by_id.get('一-01') or {}).get('required')), failures)
     check(by_id.get('六-01', {}).get('required') is True,
-          '验收报告封面 required in snapshot',
+          '验收报告封面 required in snapshot (metadata)',
           str((by_id.get('六-01') or {}).get('required')), failures)
     check(by_id.get('八-03', {}).get('required') is True,
-          '验收资料隔页 required (收录, not 一般项)',
+          '验收资料隔页 required metadata (收录, not 一般项)',
           str((by_id.get('八-03') or {}).get('required')), failures)
     check((by_id.get('二-05') or {}).get('dot') == 'gray'
           and not (by_id.get('二-05') or {}).get('docs'),
-          'optional empty row is gray, no instance',
+          'empty 工程开工令 is gray, no instance',
           str(by_id.get('二-05')), failures)
-    check((by_id.get('六-01') or {}).get('dot') == 'red'
+    check((by_id.get('六-01') or {}).get('dot') == 'gray'
           and not (by_id.get('六-01') or {}).get('docs'),
-          'required empty row is red, no instance',
+          'empty former-required cover is gray, no instance',
           str(by_id.get('六-01')), failures)
-    check('red' in dots and 'gray' in dots,
-          'fresh project has red (required empty) and gray (optional empty)',
+    check('red' not in dots,
+          'fresh project has no red missing-item dots',
           str(dots), failures)
 
     # save a field
@@ -158,7 +161,29 @@ def main() -> int:
     check(data.get('buildSite') == '岳阳市测试地点', 'field persisted',
           str(data.get('buildSite')), failures)
 
-    print('\n-- on-demand create-item (GUI 新建表格)')
+    print('\n-- on-demand create-item (GUI 新建表格 / 上传)')
+    proc = run([
+        sys.executable, str(BRIDGE), '--action', 'create-item',
+        '--project', str(root / 'project.json'), '--item', '一-01', '--json',
+    ])
+    check(proc.returncode != 0, 'upload row without source is refused',
+          'exit %d' % proc.returncode, failures)
+    scan = root / 'bid-scan.txt'
+    scan.write_text('中标通知书\n', encoding='utf-8')
+    proc = run([
+        sys.executable, str(BRIDGE), '--action', 'create-item',
+        '--project', str(root / 'project.json'), '--item', '一-01',
+        '--source', str(scan), '--json',
+    ])
+    check(proc.returncode == 0, 'upload create-item with source',
+          'exit %d %s' % (proc.returncode, (proc.stderr or '')[-200:]), failures)
+    uploaded = last_json(proc.stdout) if proc.returncode == 0 else {}
+    bid = next((it for it in ((uploaded.get('stats') or {}).get('items') or [])
+                if it.get('itemId') == '一-01'), None)
+    bid_docs = [d for d in ((bid or {}).get('docs') or []) if d.get('exists')]
+    check(bid and bid_docs and (root / bid_docs[0]['relPath']).is_file(),
+          '上传 copies the picked file',
+          str(bid_docs[:1]), failures)
     proc = run([
         sys.executable, str(BRIDGE), '--action', 'create-item',
         '--project', str(root / 'project.json'), '--item', '二-05', '--json',
@@ -169,13 +194,17 @@ def main() -> int:
     st2 = created_item.get('stats') or {}
     kgl = next((it for it in (st2.get('items') or []) if it.get('itemId') == '二-05'), None)
     kgb = next((it for it in (st2.get('items') or []) if it.get('itemId') == '二-01'), None)
+    cover = next((it for it in (st2.get('items') or []) if it.get('itemId') == '六-01'), None)
     kgl_docs = [d for d in ((kgl or {}).get('docs') or []) if d.get('exists')]
     check(kgl and kgl_docs and (root / kgl_docs[0]['relPath']).is_file(),
           '新建表格 adds one 工程开工令 instance',
           str(kgl_docs[:1]), failures)
     check(not [d for d in ((kgb or {}).get('docs') or []) if d.get('exists')],
-          'create-item does not invent other optionals',
+          'create-item does not invent other types',
           str((kgb or {}).get('docs')), failures)
+    check(not [d for d in ((cover or {}).get('docs') or []) if d.get('exists')],
+          'create-item does not auto-create former required cover',
+          str((cover or {}).get('docs')), failures)
     proc = run([
         sys.executable, str(BRIDGE), '--action', 'booklet',
         '--project', str(root / 'project.json'), '--json',
@@ -189,15 +218,18 @@ def main() -> int:
     after = last_json(proc.stdout) if proc.returncode == 0 else {}
     st3 = after.get('stats') or {}
     kgl2 = next((it for it in (st3.get('items') or []) if it.get('itemId') == '二-05'), None)
+    cover2 = next((it for it in (st3.get('items') or []) if it.get('itemId') == '六-01'), None)
     check(len([d for d in ((kgl2 or {}).get('docs') or []) if d.get('exists')]) == 1,
-          'booklet does not mass-create extra 开工令',
+          'booklet/all does not mass-create extra 开工令',
           str((kgl2 or {}).get('docs')), failures)
-    n_req = sum(1 for it in (st3.get('items') or []) if it.get('required'))
     n_with = sum(1 for it in (st3.get('items') or [])
                  if any(d.get('exists') for d in (it.get('docs') or [])))
-    check(n_with == n_req + 1,
-          'booklet instances = required + preselected optional',
-          'with=%d required=%d' % (n_with, n_req), failures)
+    check(n_with == 2,
+          'booklet/all still only the two explicitly created types',
+          'with=%d' % n_with, failures)
+    check(not [d for d in ((cover2 or {}).get('docs') or []) if d.get('exists')],
+          'booklet/all does not lay former required 32',
+          str((cover2 or {}).get('docs')), failures)
 
     # print state: need a docId — register a fake one then mark
     data = read_project(root / 'project.json')

@@ -2,7 +2,7 @@
 
 给一个工程项目做的**验收资料自动生成与管理系统**。对标「筑业云资料」：
 
-**建一个工程 = 建一个文件夹；点一次「生成必选」= 按字典「收录」列生成必填项并填好 39 个字段。可选表默认不建，右键「新建表格」按需创建。**
+**建一个工程 = 建一个文件夹。新建/打开后目录项都是 0 份。有模板右键「新建表格」建一份；无模板右键「上传」挂入文件。资料专用编辑器，不是完整 Word。**
 
 当前进度：**P7 交付 + GenOffice 源码嵌入**（P0 填充回归仍保持 37 份 / 171 处 / 0 残留；P1–P7 保持绿）。编辑内核优先 **嵌入 `vendor/genoffice` 的 `docx-engine`（Apache-2.0 钉死 commit）**：右侧「正文」可改正文/表格文字并写回**工程副本**。`pnpm add @genoffice/docx-engine` 仍是 npm 404（private:true），不再当作产品 V1。嵌入不可用时回退 **E1 表单 + 只读预览**。不是 Word 替代品。发行包内嵌引擎、模板与便携 Python；**dsh 运行时约 420MB，基础包默认不含**。凭据只走 `DEEPSEEK_API_KEY` 环境变量。
 
@@ -56,13 +56,13 @@ FillPlan 写入 `--out`（`sort_keys` 规范化 JSON）。同一输入跑两次�
 ```bash
 python tools/run_p2_regression.py
 
-# 生成必选（只生成字典「收录」= required；可选表不批量创建）
-python assets/engine/docgen_engine.py \
-  --project work/p2-booklet/project.json --item all --json
-
-# 可选表按需建一份（例：工程开工令）
+# 按需建一份（有模板：新建表格；无模板：上传源文件）
 python assets/engine/docgen_engine.py \
   --project work/p2-booklet/project.json --item 二-05 --json
+
+python assets/engine/docgen_engine.py \
+  --project work/p2-booklet/project.json --item 一-01 --mode upload \
+  --source scan.pdf --json
 
 # 编号（目录项内不重排：删掉 02，03 仍是 03）
 python assets/engine/numbering_engine.py \
@@ -73,7 +73,7 @@ python assets/engine/verify_engine.py \
   --dir work/p2-booklet --project work/p2-booklet/project.json --json
 ```
 
-`docgen --item all` 只生成**必填项**以及**已经建过表**的可选项（重复点「生成必选」不重复、不补建可选表）；`--item 二-05 --count 1` 为可选的工程开工令新建一份。必填/可选以 `表名缩写字典.csv` 的「收录」列为准（首版：上传项 + 二-01～二-05 可选，其余有模板项必填）。无模板项三选一：`--mode blank|upload|skip`（默认 `template`，无模板时按 blank 落盘）。
+`docgen --item all` **不会**新建任何空目录项（ADR-22，不是产品建表路径）。产品只走 `--item <id>`：有模板从模板建一份，无模板 `--mode upload --source <file>` 挂入用户文件。字典「收录」列仍是元数据，**不**驱动自动生成。编号规则不变（删掉 02，03 仍是 03）。永不写 `assets/templates/`。
 
 填充引擎 v1.0 默认 `--anchor on`：每个已填字段写 `yz_<key>` 书签 + `word/customXml/item1.xml` 台账。`--anchor off` 回到纯替换。缺值仍保留 `{{key}}`；日期不自动填。
 
@@ -111,7 +111,7 @@ npm run dev
 YANSHOU_PROJECT=/path/to/project npm run dev
 ```
 
-Linux 无沙箱环境会自动加 `--no-sandbox`。界面：新建/打开工程文件夹 → 左侧三页签树（可选未建灰点；必填未建红点；右键 **新建表格 / 打开 / 删除**）→ 右侧 **正文（嵌入编辑）** / 只读预览 / 台账 / 子表 / 作业 + 39 字段 E1 表单 → **生成必选**（只生成必填项）→ 打印标记 → 导出整册 PDF。正文保存只写工程副本，**永不写 `assets/templates/`**。
+Linux 无沙箱环境会自动加 `--no-sandbox`。界面：新建/打开工程文件夹 → 左侧三页签树（未建=**灰点**，不是缺项；单击空行**不**打开编辑器；右键 **新建表格**（有模板）/ **上传**（无模板）/ 打开 / 删除）→ 右侧 **正文（嵌入编辑）** / 只读预览 / 台账 / 子表 / 作业 + 39 字段 E1 表单 → 打印标记 → 导出整册 PDF。资料专用编辑器，不是完整 Word。正文保存只写工程副本，**永不写 `assets/templates/`**。
 
 V1–V4 怎么读结果：看 PR 说明或 `src/fidelity-status.json`。**V1 是源码钉死 + typecheck + bundle**，不是 npm add。**V2 必须走 Block 渲染器**（`tools/run_embed_gate.mjs`），不能只用 zip/XML。**V3 必须走 `saveDocx` 的 generated/xml 路径再 `diff_parts`**；clone-only XML 不算产品通过。嵌入失败时壳回退 E1。
 

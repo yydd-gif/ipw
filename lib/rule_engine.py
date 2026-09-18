@@ -85,7 +85,7 @@ class CatalogItem:
     numbered: bool
     importance: str = '普通项'  # 重要项 / 普通项 / 一般项（软件目录.docx 元数据，不成册依据）
     inclusion: str = 'optional'  # required / optional（字典「收录」列）
-    required: bool = False      # inclusion==required：生成必选会建表；可选默认无实例
+    required: bool = False      # inclusion==required 元数据；ADR-22 不据此自动建表
 
 
 @dataclass
